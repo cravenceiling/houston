@@ -9,8 +9,10 @@ pub mod claude_path;
 mod claude_runner;
 mod cli_process;
 mod codex_command;
+mod opencode_runner;
 pub mod codex_parser;
 pub mod concurrency;
+pub mod opencode_parser;
 pub mod manager;
 pub mod parser;
 pub mod provider_auth;
@@ -23,9 +25,10 @@ pub mod types;
 
 // Re-export key types for convenience.
 pub use codex_parser::{extract_thread_id, parse_codex_event, CodexAccumulator};
+pub use opencode_parser::{finalize, parse_opencode_event, OpenCodeAccumulator};
 pub use manager::{SessionHandle, SessionManager};
 pub use parser::{extract_session_id, parse_event, StreamAccumulator};
-pub use provider_auth::ProviderAuthState;
+pub use provider_auth::{probe_opencode_auth_status, ProviderAuthState};
 pub use session_update::SessionUpdate;
 pub use types::{
     ClaudeEvent, ContentBlock, FeedItem, FileChanges, Provider, SessionFeedBuffer, SessionStatus,

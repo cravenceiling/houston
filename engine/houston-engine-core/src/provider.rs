@@ -7,7 +7,8 @@
 
 use crate::error::{CoreError, CoreResult};
 use houston_terminal_manager::provider_auth::{
-    probe_claude_auth_status, probe_codex_auth_status, ProviderAuthState,
+    probe_claude_auth_status, probe_codex_auth_status, probe_opencode_auth_status,
+    ProviderAuthState,
 };
 use houston_terminal_manager::{claude_path, Provider};
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 mod resolve;
-use resolve::{resolve_claude, resolve_codex};
+use resolve::{resolve_claude, resolve_codex, resolve_opencode};
 
 pub const DEFAULT_PROVIDER_KEY: &str = "default_provider";
 
@@ -66,6 +67,7 @@ pub async fn check_status(provider: Provider) -> CoreResult<ProviderStatus> {
     Ok(match provider {
         Provider::Anthropic => check_claude_status().await,
         Provider::OpenAI => check_codex_status().await,
+        Provider::OpenCodeGo => check_opencode_status().await,
     })
 }
 
@@ -181,6 +183,7 @@ fn login_command(provider: Provider) -> CoreResult<ProviderCliCommand> {
     let resolved_path = match provider {
         Provider::Anthropic => resolve_claude().1,
         Provider::OpenAI => resolve_codex().1,
+        Provider::OpenCodeGo => resolve_opencode().1,
     };
     build_login_command(provider, resolved_path, claude_path::shell_path())
 }
@@ -189,6 +192,7 @@ fn logout_command(provider: Provider) -> CoreResult<ProviderCliCommand> {
     let resolved_path = match provider {
         Provider::Anthropic => resolve_claude().1,
         Provider::OpenAI => resolve_codex().1,
+        Provider::OpenCodeGo => resolve_opencode().1,
     };
     build_logout_command(provider, resolved_path, claude_path::shell_path())
 }
@@ -201,6 +205,7 @@ fn build_login_command(
     let (cli_name, args): (&'static str, Vec<&'static str>) = match provider {
         Provider::Anthropic => ("claude", vec!["auth", "login", "--claudeai"]),
         Provider::OpenAI => ("codex", vec!["login"]),
+        Provider::OpenCodeGo => ("opencode", vec!["auth", "login", "--provider", "opencode-go"]),
     };
 
     let path = resolved_path
@@ -227,6 +232,7 @@ fn build_logout_command(
     let (cli_name, args): (&'static str, Vec<&'static str>) = match provider {
         Provider::Anthropic => ("claude", vec!["auth", "logout"]),
         Provider::OpenAI => ("codex", vec!["logout"]),
+        Provider::OpenCodeGo => ("opencode", vec!["auth", "logout", "--provider", "opencode-go"]),
     };
 
     let path = resolved_path
@@ -278,6 +284,25 @@ async fn check_codex_status() -> ProviderStatus {
     }
 }
 
+async fn check_opencode_status() -> ProviderStatus {
+    let (install_source, cli_path) = resolve_opencode();
+    let cli_installed = !matches!(install_source, InstallSource::Missing);
+    let home = std::env::var("HOME").unwrap_or_default();
+    let auth_state = if cli_installed {
+        probe_opencode_auth_status(&home)
+    } else {
+        ProviderAuthState::Unauthenticated
+    };
+    ProviderStatus {
+        provider: "opencode-go".into(),
+        cli_installed,
+        auth_state,
+        cli_name: "opencode".into(),
+        install_source,
+        cli_path: cli_path.map(|p| p.to_string_lossy().into_owned()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,6 +312,7 @@ mod tests {
         assert!(parse("gemini").is_err());
         assert!(parse("anthropic").is_ok());
         assert!(parse("openai").is_ok());
+        assert!(parse("opencode-go").is_ok());
     }
 
     #[test]

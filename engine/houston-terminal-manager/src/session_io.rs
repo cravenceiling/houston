@@ -1,4 +1,5 @@
 use super::codex_parser;
+use super::opencode_parser;
 use super::parser;
 use super::stderr_filter::{stderr_feed_item, StderrState};
 use super::types::{FeedItem, Provider};
@@ -45,6 +46,10 @@ pub async fn read_stdout_events(
         Provider::Anthropic => read_claude_stdout(stdout, tx).await,
         Provider::OpenAI => {
             read_codex_stdout(stdout, tx).await;
+            StdoutReadReport::default()
+        }
+        Provider::OpenCodeGo => {
+            read_opencode_stdout(stdout, tx).await;
             StdoutReadReport::default()
         }
     }
@@ -104,6 +109,35 @@ async fn read_codex_stdout(
     }
     tracing::debug!(
         "[houston:stdout:codex] stream ended. {line_count} lines, {item_count} feed items"
+    );
+}
+
+async fn read_opencode_stdout(
+    stdout: tokio::process::ChildStdout,
+    tx: mpsc::UnboundedSender<SessionUpdate>,
+) {
+    let reader = BufReader::new(stdout);
+    let mut lines = reader.lines();
+    let mut acc = opencode_parser::OpenCodeAccumulator::default();
+    let mut line_count = 0u64;
+    let mut item_count = 0u64;
+    while let Ok(Some(line)) = lines.next_line().await {
+        line_count += 1;
+        let line_type = line.trim().chars().take(80).collect::<String>();
+        tracing::debug!("[houston:stdout:opencode] line {line_count}: {line_type}");
+
+        if let Some(sid) = opencode_parser::extract_session_id(&line) {
+            let _ = tx.send(SessionUpdate::SessionId(sid));
+        }
+        let items = opencode_parser::parse_opencode_event(&line, &mut acc);
+        item_count += log_and_send(&tx, items);
+    }
+    let final_items = opencode_parser::finalize(&acc);
+    if !final_items.is_empty() {
+        item_count += log_and_send(&tx, final_items);
+    }
+    tracing::debug!(
+        "[houston:stdout:opencode] stream ended. {line_count} lines, {item_count} feed items"
     );
 }
 

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
-const PROVIDERS: [Provider; 2] = [Provider::Anthropic, Provider::OpenAI];
+const PROVIDERS: [Provider; 3] = [Provider::Anthropic, Provider::OpenAI, Provider::OpenCodeGo];
 
 fn sessions_dir(agent_dir: &Path) -> PathBuf {
     agent_dir.join(".houston").join("sessions")

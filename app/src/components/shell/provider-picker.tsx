@@ -11,6 +11,7 @@ import {
   Button,
 } from "@houston-ai/core";
 import { tauriProvider, tauriSystem, type ProviderStatus } from "../../lib/tauri";
+import { OpenCodeLogo } from "./opencode-logo";
 import {
   PROVIDERS,
   COMING_SOON_PROVIDERS,
@@ -38,13 +39,14 @@ export function ProviderPicker({ value, model: controlledModel, onSelect }: Prop
 
   const prevStatuses = useRef<Record<string, ProviderStatus>>({});
   const loadStatuses = useCallback(async () => {
-    const [openai, anthropic] = await Promise.all([
+    const [openai, anthropic, opencode] = await Promise.all([
       tauriProvider.checkStatus("openai"),
       tauriProvider.checkStatus("anthropic"),
+      tauriProvider.checkStatus("opencode-go"),
     ]);
-    const next: Record<string, ProviderStatus> = { openai, anthropic };
+    const next: Record<string, ProviderStatus> = { openai, anthropic, "opencode-go": opencode };
     // Track when a provider transitions to connected
-    for (const id of ["openai", "anthropic"] as const) {
+    for (const id of ["openai", "anthropic", "opencode-go"] as const) {
       const wasConnected = prevStatuses.current[id]?.cli_installed && prevStatuses.current[id]?.authenticated;
       const isConnected = next[id]?.cli_installed && next[id]?.authenticated;
       if (!wasConnected && isConnected) {
@@ -233,7 +235,7 @@ function ProviderCard({
 
       {/* Logo */}
       <div className="h-10 w-10 flex items-center justify-center">
-        {provider.id === "anthropic" ? <ClaudeLogo /> : <OpenAILogo />}
+        {provider.id === "anthropic" ? <ClaudeLogo /> : provider.id === "opencode-go" ? <OpenCodeLogo /> : <OpenAILogo />}
       </div>
 
       {/* Name */}

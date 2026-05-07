@@ -47,6 +47,30 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     ],
     defaultModel: "sonnet",
   },
+  {
+    id: "opencode-go",
+    name: "OpenCode Go",
+    subtitle: "AI Subscription",
+    cliName: "opencode",
+    installUrl: "https://opencode.ai/docs/cli",
+    loginCommand: "opencode auth login --provider opencode-go",
+    cost: "$5/mo first month, then $10/mo",
+    models: [
+      { id: "opencode-go/glm-5.1", label: "GLM-5.1", description: "Most capable. Best reasoning." },
+      { id: "opencode-go/glm-5", label: "GLM-5", description: "Strong reasoning and tool use." },
+      { id: "opencode-go/kimi-k2.6", label: "Kimi K2.6", description: "Advanced comprehension." },
+      { id: "opencode-go/kimi-k2.5", label: "Kimi K2.5", description: "Balanced performance." },
+      { id: "opencode-go/mimo-v2.5-pro", label: "MiMo-V2.5-Pro", description: "Professional coding agent." },
+      { id: "opencode-go/mimo-v2.5", label: "MiMo-V2.5", description: "Efficient coding assistant." },
+      { id: "opencode-go/minimax-m2.7", label: "MiniMax M2.7", description: "Latest MiniMax model." },
+      { id: "opencode-go/minimax-m2.5", label: "MiniMax M2.5", description: "Cost-effective MiniMax." },
+      { id: "opencode-go/qwen3.6-plus", label: "Qwen3.6 Plus", description: "Latest Qwen model." },
+      { id: "opencode-go/qwen3.5-plus", label: "Qwen3.5 Plus", description: "Strong general model." },
+      { id: "opencode-go/deepseek-v4-pro", label: "DeepSeek V4 Pro", description: "Deep coding specialist." },
+      { id: "opencode-go/deepseek-v4-flash", label: "DeepSeek V4 Flash", description: "Fast DeepSeek model." },
+    ],
+    defaultModel: "opencode-go/glm-5.1",
+  },
 ] as const;
 
 /** Find a provider by id. */

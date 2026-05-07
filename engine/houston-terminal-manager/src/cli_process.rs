@@ -33,6 +33,7 @@ pub(crate) async fn run_cli_process(
     let cli_name = match provider {
         Provider::Anthropic => "claude",
         Provider::OpenAI => "codex",
+        Provider::OpenCodeGo => "opencode",
     };
 
     cmd.stdout(Stdio::piped());

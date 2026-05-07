@@ -64,6 +64,7 @@ async fn run_provider_summary(
     match provider {
         Provider::Anthropic => run_claude_summary(&prompt, model).await,
         Provider::OpenAI => run_codex_summary(&prompt, model).await,
+        Provider::OpenCodeGo => todo!("OpenCodeGo not yet implemented"),
     }
 }
 

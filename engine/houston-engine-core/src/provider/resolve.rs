@@ -25,6 +25,13 @@ pub(super) fn resolve_codex() -> (InstallSource, Option<PathBuf>) {
     (InstallSource::Missing, None)
 }
 
+pub(super) fn resolve_opencode() -> (InstallSource, Option<PathBuf>) {
+    if let Some(path) = which_on_path("opencode") {
+        return (InstallSource::Path, Some(path));
+    }
+    (InstallSource::Missing, None)
+}
+
 fn which_on_path(command: &str) -> Option<PathBuf> {
     let shell_path = claude_path::shell_path();
     for dir in std::env::split_paths(&shell_path) {

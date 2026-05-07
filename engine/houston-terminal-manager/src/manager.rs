@@ -2,6 +2,7 @@ use super::types::{Provider, SessionStatus};
 use crate::claude_runner::spawn_claude;
 use crate::cli_process::{run_cli_process, CliRunOutcome};
 use crate::codex_command;
+use crate::opencode_runner::spawn_opencode;
 use crate::session_update::SessionUpdate;
 use tokio::process::Command;
 use tokio::sync::mpsc;
@@ -59,6 +60,16 @@ impl SessionManager {
                         &tx,
                         prompt,
                         resume_session_id,
+                        working_dir,
+                        model,
+                        system_prompt,
+                    )
+                    .await;
+                }
+                Provider::OpenCodeGo => {
+                    spawn_opencode(
+                        &tx,
+                        prompt,
                         working_dir,
                         model,
                         system_prompt,

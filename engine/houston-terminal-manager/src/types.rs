@@ -11,6 +11,8 @@ pub enum Provider {
     Anthropic,
     /// OpenAI Codex (via `codex` CLI)
     OpenAI,
+    /// OpenCode Go (via `opencode` CLI)
+    OpenCodeGo,
 }
 
 impl fmt::Display for Provider {
@@ -18,6 +20,7 @@ impl fmt::Display for Provider {
         match self {
             Provider::Anthropic => write!(f, "anthropic"),
             Provider::OpenAI => write!(f, "openai"),
+            Provider::OpenCodeGo => write!(f, "opencode-go"),
         }
     }
 }
@@ -28,6 +31,7 @@ impl FromStr for Provider {
         match s.to_lowercase().as_str() {
             "anthropic" | "claude" => Ok(Provider::Anthropic),
             "openai" | "codex" => Ok(Provider::OpenAI),
+            "opencode-go" | "opencode_go" => Ok(Provider::OpenCodeGo),
             other => Err(format!("Unknown provider: {other}")),
         }
     }

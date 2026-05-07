@@ -147,6 +147,46 @@ fn read_codex_auth_file(home: &str) -> ProviderAuthState {
         .unwrap_or(ProviderAuthState::Unknown)
 }
 
+pub fn probe_opencode_auth_status(home: &str) -> ProviderAuthState {
+    let auth_path = opencode_auth_path(home);
+    let content = match std::fs::read_to_string(&auth_path) {
+        Ok(content) => content,
+        Err(_) => return ProviderAuthState::Unauthenticated,
+    };
+    let value = match serde_json::from_str::<serde_json::Value>(&content) {
+        Ok(v) => v,
+        Err(_) => return ProviderAuthState::Unknown,
+    };
+    let Some(providers) = value.get("providers").and_then(|p| p.as_object()) else {
+        return ProviderAuthState::Unauthenticated;
+    };
+    for (_name, entry) in providers {
+        if let Some(api_key) = entry.get("apiKey").and_then(|k| k.as_str()) {
+            if !api_key.is_empty() {
+                return ProviderAuthState::Authenticated;
+            }
+        }
+    }
+    ProviderAuthState::Unauthenticated
+}
+
+fn opencode_auth_path(home: &str) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let appdata = std::env::var("APPDATA")
+            .unwrap_or_else(|_| format!("{}/AppData/Roaming", home));
+        PathBuf::from(appdata).join("opencode").join("auth.json")
+    }
+    #[cfg(not(windows))]
+    {
+        PathBuf::from(home)
+            .join(".local")
+            .join("share")
+            .join("opencode")
+            .join("auth.json")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,6 +225,76 @@ mod tests {
     fn codex_login_status_falls_back_on_config_errors() {
         let stderr = "Error loading configuration: unknown variant `xhigh`";
         let state = classify_codex_login_status_output(false, "", stderr);
+        assert_eq!(state, ProviderAuthState::Unknown);
+    }
+}
+
+#[cfg(test)]
+mod opencode_tests {
+    use super::*;
+    use std::fs;
+
+    fn tmp_home() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
+    #[test]
+    fn authenticated_when_api_key_present() {
+        let home = tmp_home();
+        let dir = home.path().join(".local").join("share").join("opencode");
+        fs::create_dir_all(&dir).unwrap();
+        let json = r#"{"providers":{"opencode-go":{"apiKey":"sk-xxx"}}}"#;
+        fs::write(dir.join("auth.json"), json).unwrap();
+        let state = probe_opencode_auth_status(
+            home.path().to_str().unwrap(),
+        );
+        assert_eq!(state, ProviderAuthState::Authenticated);
+    }
+
+    #[test]
+    fn unauthenticated_when_no_providers() {
+        let home = tmp_home();
+        let dir = home.path().join(".local").join("share").join("opencode");
+        fs::create_dir_all(&dir).unwrap();
+        let json = r#"{"providers":{}}"#;
+        fs::write(dir.join("auth.json"), json).unwrap();
+        let state = probe_opencode_auth_status(
+            home.path().to_str().unwrap(),
+        );
+        assert_eq!(state, ProviderAuthState::Unauthenticated);
+    }
+
+    #[test]
+    fn unauthenticated_when_empty_api_key() {
+        let home = tmp_home();
+        let dir = home.path().join(".local").join("share").join("opencode");
+        fs::create_dir_all(&dir).unwrap();
+        let json = r#"{"providers":{"opencode-go":{"apiKey":""}}}"#;
+        fs::write(dir.join("auth.json"), json).unwrap();
+        let state = probe_opencode_auth_status(
+            home.path().to_str().unwrap(),
+        );
+        assert_eq!(state, ProviderAuthState::Unauthenticated);
+    }
+
+    #[test]
+    fn unauthenticated_when_file_missing() {
+        let home = tmp_home();
+        let state = probe_opencode_auth_status(
+            home.path().to_str().unwrap(),
+        );
+        assert_eq!(state, ProviderAuthState::Unauthenticated);
+    }
+
+    #[test]
+    fn unknown_when_malformed_json() {
+        let home = tmp_home();
+        let dir = home.path().join(".local").join("share").join("opencode");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("auth.json"), "{{bad json}}").unwrap();
+        let state = probe_opencode_auth_status(
+            home.path().to_str().unwrap(),
+        );
         assert_eq!(state, ProviderAuthState::Unknown);
     }
 }
