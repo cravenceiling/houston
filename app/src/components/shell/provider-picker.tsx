@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type FC } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, CircleDashed, ExternalLink, Terminal, ChevronDown, LogOut } from "lucide-react";
 import {
@@ -11,7 +11,6 @@ import {
   Button,
 } from "@houston-ai/core";
 import { tauriProvider, tauriSystem, type ProviderStatus } from "../../lib/tauri";
-import { OpenCodeLogo } from "./opencode-logo";
 import {
   PROVIDERS,
   COMING_SOON_PROVIDERS,
@@ -25,6 +24,15 @@ interface Props {
   model?: string | null;
   onSelect: (provider: string, model: string) => void;
 }
+
+const PROVIDER_LOGOS: Record<string, FC> = {
+  anthropic: ClaudeLogo,
+  openai: OpenAILogo,
+  "opencode-go": OpenCodeLogo,
+  gemini: GeminiLogo,
+  deepseek: DeepSeekLogo,
+  minimax: MiniMaxLogo,
+};
 
 export function ProviderPicker({ value, model: controlledModel, onSelect }: Props) {
   const [statuses, setStatuses] = useState<Record<string, ProviderStatus>>({});
@@ -203,6 +211,7 @@ function ProviderCard({
   };
 
   const selectedModelObj = provider.models.find((m) => m.id === selectedModel) ?? provider.models[0];
+  const LogoComponent = PROVIDER_LOGOS[provider.id];
 
   return (
     <div
@@ -235,7 +244,7 @@ function ProviderCard({
 
       {/* Logo */}
       <div className="h-10 w-10 flex items-center justify-center">
-        {provider.id === "anthropic" ? <ClaudeLogo /> : provider.id === "opencode-go" ? <OpenCodeLogo /> : <OpenAILogo />}
+        <LogoComponent />
       </div>
 
       {/* Name */}
@@ -368,22 +377,17 @@ function ComingSoonCard({ provider }: { provider: ComingSoonProviderInfo }) {
 }
 
 function ComingSoonLogo({ provider }: { provider: ComingSoonProviderInfo }) {
-  switch (provider.id) {
-    case "gemini":
-      return <GeminiLogo />;
-    case "deepseek":
-      return <DeepSeekLogo />;
-    case "minimax":
-      return <MiniMaxLogo />;
-    default:
-      return (
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-          <span className="text-xs font-semibold tracking-tight text-foreground">
-            {provider.mark}
-          </span>
-        </div>
-      );
+  const Logo = PROVIDER_LOGOS[provider.id] || null;
+  if (Logo) {
+    return <Logo />;
   }
+  return (
+    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
+      <span className="text-xs font-semibold tracking-tight text-foreground">
+        {provider.mark}
+      </span>
+    </div>
+  );
 }
 
 function SetupGuidance({
@@ -552,6 +556,18 @@ function MiniMaxLogo() {
   return (
     <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
       <path d="M11.43 3.92a.86.86 0 1 0-1.718 0v14.236a1.999 1.999 0 0 1-3.997 0V9.022a.86.86 0 1 0-1.718 0v3.87a1.999 1.999 0 0 1-3.997 0V11.49a.57.57 0 0 1 1.139 0v1.404a.86.86 0 0 0 1.719 0V9.022a1.999 1.999 0 0 1 3.997 0v9.134a.86.86 0 0 0 1.719 0V3.92a1.998 1.998 0 1 1 3.996 0v11.788a.57.57 0 1 1-1.139 0zm10.572 3.105a2 2 0 0 0-1.999 1.997v7.63a.86.86 0 0 1-1.718 0V3.923a1.999 1.999 0 0 0-3.997 0v16.16a.86.86 0 0 1-1.719 0V18.08a.57.57 0 1 0-1.138 0v2a1.998 1.998 0 0 0 3.996 0V3.92a.86.86 0 0 1 1.719 0v12.73a1.999 1.999 0 0 0 3.996 0V9.023a.86.86 0 1 1 1.72 0v6.686a.57.57 0 0 0 1.138 0V9.022a2 2 0 0 0-1.998-1.997" />
+    </svg>
+  );
+}
+
+function OpenCodeLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M5 2.5A2.5 2.5 0 0 0 2.5 5v14A2.5 2.5 0 0 0 5 21.5h14a2.5 2.5 0 0 0 2.5-2.5V5A2.5 2.5 0 0 0 19 2.5H5Zm3 3v13h8v-13H8Z"
+      />
     </svg>
   );
 }
