@@ -91,6 +91,29 @@ pub async fn run_routine(
         .clone();
 
     ensure_houston_dir(&working_dir)?;
+
+    // Reject early if a run is already in flight for this agent. Without
+    // this, repeated `run-now` clicks (a) pollute the on-disk history
+    // with `status="error", summary="conflict: another mission..."` rows
+    // from the workdir-lock failure inside the dispatcher, and (b) leave
+    // the UI unable to pick out the "real" running run vs. the noise
+    // since `lastRuns` keys by latest `started_at`. Fail fast at the
+    // route level instead — frontend gets a 409 and surfaces a toast.
+    //
+    // We treat "in flight" as "status=running on disk". The workdir lock
+    // would be a more precise signal, but it lives on `SessionRuntime`
+    // and isn't reachable from this transport-neutral runner. Disk state
+    // is reliable for the common case (one run completes, status flips
+    // terminal); orphan `running` rows from a crashed engine are swept
+    // by `sweep_orphan_running` at agent-scheduler start.
+    let existing = routine_runs::list(&working_dir)?;
+    if let Some(busy) = existing.iter().find(|r| r.status == "running") {
+        return Err(CoreError::Conflict(format!(
+            "another routine run is already in progress (run {})",
+            busy.id
+        )));
+    }
+
     let run = routine_runs::create(&working_dir, routine_id)?;
     events.emit(HoustonEvent::RoutineRunsChanged {
         agent_path: agent_path.to_string(),
@@ -115,6 +138,18 @@ pub async fn run_routine(
     let now = Utc::now().to_rfc3339();
     let response = outcome.response_text;
     let is_silent = routine.suppress_when_silent && response_is_silent(&response);
+
+    // Cancellation race: the cancel handler may have written status="cancelled"
+    // (and SIGTERM'd the PID) while we were awaiting dispatch. In that case the
+    // disk record is already terminal — don't overwrite it with `error`/`silent`/
+    // `surfaced`, and don't create an activity for a cancelled run.
+    let current = routine_runs::find_by_id(&working_dir, &run.id)?;
+    if current.status == "cancelled" {
+        events.emit(HoustonEvent::RoutineRunsChanged {
+            agent_path: agent_path.to_string(),
+        });
+        return Ok(());
+    }
 
     if is_silent {
         routine_runs::update(
@@ -180,6 +215,53 @@ pub async fn run_routine(
     });
 
     Ok(())
+}
+
+/// Cancel an in-flight routine run end-to-end.
+///
+/// Writes `status="cancelled"` to disk FIRST so a concurrent dispatch
+/// completion can't overwrite the terminal state (see `run_routine`'s
+/// race-protection branch). Then SIGTERMs the provider subprocess via
+/// `sessions::cancel`. Finally emits `RoutineRunsChanged` so clients
+/// re-fetch.
+///
+/// Returns `Conflict` if the run is not in `running` status — the UI
+/// shouldn't offer cancel on a terminal run, so this is treated as a
+/// caller bug rather than a no-op.
+pub async fn cancel_run(
+    rt: &crate::sessions::SessionRuntime,
+    events: &DynEventSink,
+    root: &Path,
+    agent_path: &str,
+    run_id: &str,
+) -> CoreResult<RoutineRun> {
+    let run = routine_runs::find_by_id(root, run_id)?;
+    if run.status != "running" {
+        return Err(CoreError::Conflict(format!(
+            "routine run {run_id} is not running (status={})",
+            run.status
+        )));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let updated = routine_runs::update(
+        root,
+        run_id,
+        RoutineRunUpdate {
+            status: Some("cancelled".into()),
+            completed_at: Some(now),
+            summary: Some("Stopped by user".into()),
+            ..Default::default()
+        },
+    )?;
+
+    crate::sessions::cancel(rt, events, agent_path, &run.session_key).await;
+
+    events.emit(HoustonEvent::RoutineRunsChanged {
+        agent_path: agent_path.to_string(),
+    });
+
+    Ok(updated)
 }
 
 /// Expand a leading `~` to the user's home dir. Copy of
@@ -363,6 +445,149 @@ mod tests {
         let runs = routine_runs::list(d.path()).unwrap();
         assert_eq!(runs[0].status, "surfaced");
         assert_eq!(runs[0].activity_id.as_deref(), Some("act-1"));
+    }
+
+    #[tokio::test]
+    async fn run_routine_rejects_when_another_run_is_in_flight() {
+        // Reproduces the original repro: user spam-clicks Run Now while a
+        // previous run is still active. The second call must 409 (Conflict)
+        // and must NOT create a new routine_run row — otherwise the history
+        // fills with confusing "another mission is already running" error
+        // rows and the UI loses track of which run is the real one.
+        let d = TempDir::new().unwrap();
+        let agent_path = d.path().to_string_lossy().to_string();
+        let r = create(d.path(), sample_routine()).unwrap();
+
+        // Seed an in-flight run on disk — what the previous click left.
+        let in_flight = routine_runs::create(d.path(), &r.id).unwrap();
+        assert_eq!(in_flight.status, "running");
+
+        let dispatcher = Arc::new(FakeDispatcher(DispatchOutcome::default()));
+        let surface = Arc::new(RecordingSurface::default());
+
+        let err = run_routine(
+            Arc::new(NoopEventSink),
+            dispatcher,
+            surface,
+            &agent_path,
+            &r.id,
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, CoreError::Conflict(_)));
+
+        // Disk must still hold exactly one run — the original in-flight one.
+        let runs = routine_runs::list(d.path()).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].id, in_flight.id);
+    }
+
+    #[tokio::test]
+    async fn cancelled_status_on_disk_is_preserved_through_dispatch() {
+        // Race: user cancels while the dispatcher is mid-flight. The cancel
+        // handler writes "cancelled" + completed_at, then kills the PID, which
+        // causes the dispatcher to return with an error. The runner must NOT
+        // overwrite that terminal state, and must NOT create an activity.
+        let d = TempDir::new().unwrap();
+        let agent_path = d.path().to_string_lossy().to_string();
+        let r = create(d.path(), sample_routine()).unwrap();
+
+        // A dispatcher that flips the on-disk run to "cancelled" before
+        // returning, simulating the cancel-then-dispatch-completes ordering.
+        struct CancelDuringDispatch(PathBuf);
+        #[async_trait]
+        impl RoutineDispatcher for CancelDuringDispatch {
+            async fn dispatch(&self, ctx: DispatchContext<'_>) -> DispatchOutcome {
+                routine_runs::update(
+                    &self.0,
+                    &ctx.run.id,
+                    RoutineRunUpdate {
+                        status: Some("cancelled".into()),
+                        completed_at: Some(Utc::now().to_rfc3339()),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                DispatchOutcome {
+                    response_text: String::new(),
+                    error: Some("terminated by user".into()),
+                }
+            }
+        }
+
+        let dispatcher = Arc::new(CancelDuringDispatch(d.path().to_path_buf()));
+        let surface = Arc::new(RecordingSurface::default());
+
+        run_routine(
+            Arc::new(NoopEventSink),
+            dispatcher,
+            surface.clone(),
+            &agent_path,
+            &r.id,
+        )
+        .await
+        .unwrap();
+
+        let runs = routine_runs::list(d.path()).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].status, "cancelled");
+        assert!(surface.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancel_run_marks_cancelled_when_running() {
+        let d = TempDir::new().unwrap();
+        let agent_path = d.path().to_string_lossy().to_string();
+        let r = create(d.path(), sample_routine()).unwrap();
+        let run = routine_runs::create(d.path(), &r.id).unwrap();
+
+        let rt = crate::sessions::SessionRuntime::default();
+        let events: DynEventSink = Arc::new(NoopEventSink);
+
+        let updated = cancel_run(&rt, &events, d.path(), &agent_path, &run.id)
+            .await
+            .unwrap();
+
+        assert_eq!(updated.status, "cancelled");
+        assert!(updated.completed_at.is_some());
+        assert_eq!(updated.summary.as_deref(), Some("Stopped by user"));
+    }
+
+    #[tokio::test]
+    async fn cancel_run_conflicts_when_already_terminal() {
+        let d = TempDir::new().unwrap();
+        let agent_path = d.path().to_string_lossy().to_string();
+        let r = create(d.path(), sample_routine()).unwrap();
+        let run = routine_runs::create(d.path(), &r.id).unwrap();
+        routine_runs::update(
+            d.path(),
+            &run.id,
+            RoutineRunUpdate {
+                status: Some("silent".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let rt = crate::sessions::SessionRuntime::default();
+        let events: DynEventSink = Arc::new(NoopEventSink);
+
+        let err = cancel_run(&rt, &events, d.path(), &agent_path, &run.id)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CoreError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn cancel_run_not_found_for_missing_run() {
+        let d = TempDir::new().unwrap();
+        let rt = crate::sessions::SessionRuntime::default();
+        let events: DynEventSink = Arc::new(NoopEventSink);
+
+        let err = cancel_run(&rt, &events, d.path(), "agent", "nope")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CoreError::NotFound(_)));
     }
 
     #[tokio::test]

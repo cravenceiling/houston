@@ -169,6 +169,7 @@ not user-facing copy.
 | GET/POST | `/v1/routines` | List/create (by `?agentPath`) |
 | PATCH/DELETE | `/v1/routines/:id` | Update/delete |
 | POST | `/v1/routines/:id/runs` | Create run |
+| POST | `/v1/routines/:id/runs/:run_id:cancel` | Stop an in-flight run (kills the provider PID, marks status `cancelled`). 409 if the run is already terminal. Deleting a routine cascades to this for any `running` runs. |
 | POST | `/v1/routines/:id/run-now` | Manual trigger |
 | GET | `/v1/routine-runs` | List (optional `?routineId`) |
 | PATCH | `/v1/routine-runs/:id` | Update run |

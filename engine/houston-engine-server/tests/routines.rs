@@ -210,6 +210,266 @@ async fn routine_runs_create_update_filter() {
 }
 
 #[tokio::test]
+async fn cancel_run_marks_cancelled_then_409_on_repeat() {
+    let (addr, tok, docs) = spawn().await;
+    let agent = docs.path().join("ws").join("alpha");
+    std::fs::create_dir_all(&agent).unwrap();
+    let agent_path = agent.to_string_lossy().to_string();
+    let c = reqwest::Client::new();
+
+    let r: serde_json::Value = c
+        .post(format!("http://{addr}/v1/routines"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .json(&serde_json::json!({
+            "name": "X",
+            "description": "",
+            "prompt": "p",
+            "schedule": "* * * * *",
+            "enabled": true,
+            "suppress_when_silent": true,
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rid = r["id"].as_str().unwrap().to_string();
+
+    let run: serde_json::Value = c
+        .post(format!("http://{addr}/v1/routines/{rid}/runs"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let run_id = run["id"].as_str().unwrap().to_string();
+
+    // First cancel: 200, status flips to cancelled.
+    let cancelled: serde_json::Value = c
+        .post(format!(
+            "http://{addr}/v1/routines/{rid}/runs/{run_id}:cancel"
+        ))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cancelled["status"], "cancelled");
+    assert_eq!(cancelled["summary"], "Stopped by user");
+
+    // Second cancel: 409 — already terminal.
+    let again = c
+        .post(format!(
+            "http://{addr}/v1/routines/{rid}/runs/{run_id}:cancel"
+        ))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(again.status(), 409);
+
+    // Unknown action verb: 400.
+    let bad = c
+        .post(format!(
+            "http://{addr}/v1/routines/{rid}/runs/{run_id}:nuke"
+        ))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+
+    // Missing run: 404.
+    let missing = c
+        .post(format!(
+            "http://{addr}/v1/routines/{rid}/runs/nope:cancel"
+        ))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+}
+
+#[tokio::test]
+async fn delete_routine_cancels_in_flight_runs() {
+    let (addr, tok, docs) = spawn().await;
+    let agent = docs.path().join("ws").join("alpha");
+    std::fs::create_dir_all(&agent).unwrap();
+    let agent_path = agent.to_string_lossy().to_string();
+    let c = reqwest::Client::new();
+
+    let r: serde_json::Value = c
+        .post(format!("http://{addr}/v1/routines"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .json(&serde_json::json!({
+            "name": "X",
+            "description": "",
+            "prompt": "p",
+            "schedule": "* * * * *",
+            "enabled": true,
+            "suppress_when_silent": true,
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rid = r["id"].as_str().unwrap().to_string();
+
+    // Two runs: one terminal, one running.
+    let run_running: serde_json::Value = c
+        .post(format!("http://{addr}/v1/routines/{rid}/runs"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let run_done: serde_json::Value = c
+        .post(format!("http://{addr}/v1/routines/{rid}/runs"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let _: serde_json::Value = c
+        .patch(format!(
+            "http://{addr}/v1/routine-runs/{}",
+            run_done["id"].as_str().unwrap()
+        ))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .json(&serde_json::json!({ "status": "silent" }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    // Delete the routine.
+    let del = c
+        .delete(format!("http://{addr}/v1/routines/{rid}"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap();
+    assert!(del.status().is_success());
+
+    // The running run should now be `cancelled`; the terminal run unchanged.
+    let runs: serde_json::Value = c
+        .get(format!("http://{addr}/v1/routine-runs"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let running_id = run_running["id"].as_str().unwrap();
+    let done_id = run_done["id"].as_str().unwrap();
+    for run in runs.as_array().unwrap() {
+        let id = run["id"].as_str().unwrap();
+        if id == running_id {
+            assert_eq!(run["status"], "cancelled");
+        } else if id == done_id {
+            assert_eq!(run["status"], "silent");
+        }
+    }
+}
+
+#[tokio::test]
+async fn run_now_returns_409_when_another_run_is_in_flight() {
+    // Repros the spam-click scenario: a previous "Run now" is still active
+    // (status=running on disk). The next click must 409 BEFORE spawning a
+    // CLI, BEFORE creating a new routine_run row — keeping history free of
+    // "conflict: another mission..." noise.
+    let (addr, tok, docs) = spawn().await;
+    let agent = docs.path().join("ws").join("alpha");
+    std::fs::create_dir_all(&agent).unwrap();
+    let agent_path = agent.to_string_lossy().to_string();
+    let c = reqwest::Client::new();
+
+    let r: serde_json::Value = c
+        .post(format!("http://{addr}/v1/routines"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .json(&serde_json::json!({
+            "name": "Spam",
+            "description": "",
+            "prompt": "p",
+            "schedule": "* * * * *",
+            "enabled": true,
+            "suppress_when_silent": true,
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rid = r["id"].as_str().unwrap().to_string();
+
+    // Seed an in-flight run via the runs POST so disk shows status=running.
+    let _: serde_json::Value = c
+        .post(format!("http://{addr}/v1/routines/{rid}/runs"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    // Now POST run-now — should reject with 409.
+    let res = c
+        .post(format!("http://{addr}/v1/routines/{rid}/run-now"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 409);
+
+    // Disk must still hold exactly one run — the rejected run-now didn't
+    // create a new row.
+    let runs: serde_json::Value = c
+        .get(format!("http://{addr}/v1/routine-runs"))
+        .query(&[("agentPath", &agent_path)])
+        .bearer_auth(&tok)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(runs.as_array().unwrap().len(), 1);
+    assert_eq!(runs[0]["status"], "running");
+}
+
+#[tokio::test]
 async fn requires_auth() {
     let (addr, _tok, _docs) = spawn().await;
     let c = reqwest::Client::new();

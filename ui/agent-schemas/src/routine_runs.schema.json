@@ -9,12 +9,16 @@
     "properties": {
       "id": { "type": "string" },
       "routine_id": { "type": "string" },
-      "status": { "type": "string", "enum": ["running", "silent", "surfaced", "error"] },
+      "status": { "type": "string", "enum": ["running", "silent", "surfaced", "error", "cancelled"] },
       "session_key": { "type": "string" },
       "activity_id": { "type": "string" },
       "summary": { "type": "string" },
       "started_at": { "type": "string", "format": "date-time" },
-      "completed_at": { "type": "string", "format": "date-time" }
+      "completed_at": { "type": "string", "format": "date-time" },
+      "paused_until": {
+        "type": "string",
+        "description": "Human-readable reset hint while the provider CLI is sleeping on a usage-limit window. Only meaningful when status is 'running'."
+      }
     },
     "additionalProperties": false
   }

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Play,
   Pause,
+  Square,
   Trash2,
   Globe,
   CalendarClock,
@@ -53,6 +54,17 @@ export interface RoutineEditorProps {
   routine?: Routine
   runs?: RoutineRun[]
   onRunNow?: () => void
+  /** Disable the "Run now" button while a manual-run request is in flight.
+   *  Guards against spam-click races where the disk-state `running` row
+   *  hasn't propagated through TanStack invalidation yet — without this,
+   *  each extra click queues a redundant request that the engine then
+   *  rejects with 409 (or, on older builds, recorded as a conflict-error
+   *  row in run history). */
+  runNowPending?: boolean
+  /** Stop an in-flight run. When present + a run is `running`, the header
+   *  "Run now" button swaps to "Stop" and the matching run row shows a stop
+   *  control. */
+  onCancelRun?: (runId: string) => void
   onToggle?: (enabled: boolean) => void
   onDelete?: () => void
   onViewActivity?: (activityId: string) => void
@@ -142,12 +154,15 @@ export function RoutineEditor({
   routine,
   runs = [],
   onRunNow,
+  runNowPending,
+  onCancelRun,
   onToggle,
   onDelete,
   onViewActivity,
   accountTimezone,
   hasChanges,
 }: RoutineEditorProps) {
+  const runningRun = runs.find((r) => r.status === "running")
   const isEdit = !!routine
   const canSubmit =
     !!value.name.trim() &&
@@ -192,11 +207,28 @@ export function RoutineEditor({
           </p>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {isEdit && onRunNow && (
-              <Button variant="ghost" size="sm" onClick={onRunNow}>
-                <Play className="size-3.5" />
-                Run now
+            {isEdit && runningRun && onCancelRun ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCancelRun(runningRun.id)}
+              >
+                <Square className="size-3.5" />
+                Stop
               </Button>
+            ) : (
+              isEdit &&
+              onRunNow && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRunNow}
+                  disabled={runNowPending}
+                >
+                  <Play className="size-3.5" />
+                  {runNowPending ? "Starting…" : "Run now"}
+                </Button>
+              )
             )}
             <Button onClick={onSubmit} size="sm" disabled={!canSubmit}>
               {isEdit ? "Save changes" : "Create routine"}
@@ -381,7 +413,11 @@ export function RoutineEditor({
 
           {isEdit && (
             <SectionCard title="Recent runs">
-              <RunHistory runs={runs} onViewActivity={onViewActivity} />
+              <RunHistory
+                runs={runs}
+                onViewActivity={onViewActivity}
+                onCancelRun={onCancelRun}
+              />
             </SectionCard>
           )}
         </div>

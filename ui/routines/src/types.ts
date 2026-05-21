@@ -19,7 +19,7 @@ export interface Routine {
   updated_at: string
 }
 
-export type RunStatus = "running" | "silent" | "surfaced" | "error"
+export type RunStatus = "running" | "silent" | "surfaced" | "error" | "cancelled"
 
 export interface RoutineRun {
   id: string
@@ -33,6 +33,10 @@ export interface RoutineRun {
   summary?: string
   started_at: string
   completed_at?: string
+  /** Human-readable reset hint (e.g. `"5pm (America/Los_Angeles)"`) when the
+   *  provider CLI is sleeping on a plan-window usage limit. Only meaningful
+   *  while `status === "running"`. */
+  paused_until?: string
 }
 
 export type SchedulePreset =
