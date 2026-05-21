@@ -651,6 +651,18 @@ export class HoustonClient {
       agentPath,
     });
   }
+  cancelRoutineRun(
+    agentPath: string,
+    routineId: string,
+    runId: string,
+  ): Promise<RoutineRun> {
+    return this.request(
+      "POST",
+      `/routines/${this.seg(routineId)}/runs/${this.seg(runId)}:cancel`,
+      undefined,
+      { agentPath },
+    );
+  }
   startRoutineScheduler(agentPath: string): Promise<void> {
     return this.request("POST", "/routines/scheduler/start", undefined, { agentPath });
   }

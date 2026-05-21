@@ -69,3 +69,14 @@ export function useRunRoutineNow(agentPath: string) {
     },
   });
 }
+
+export function useCancelRoutineRun(agentPath: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ routineId, runId }: { routineId: string; runId: string }) =>
+      tauriRoutines.cancelRun(agentPath, routineId, runId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["routine-runs", agentPath] });
+    },
+  });
+}

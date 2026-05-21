@@ -4,13 +4,15 @@
  * Visual: dense one-line rows so a long history scans quickly. Surfaced runs
  * get a "View" affordance that links back to the activity board.
  */
-import { cn } from "@houston-ai/core"
-import { ArrowUpRight } from "lucide-react"
+import { cn, Button } from "@houston-ai/core"
+import { ArrowUpRight, Square } from "lucide-react"
 import type { RoutineRun } from "./types"
 
 export interface RunHistoryProps {
   runs: RoutineRun[]
   onViewActivity?: (activityId: string) => void
+  /** Stop an in-flight `running` run. When omitted, the stop button is not rendered. */
+  onCancelRun?: (runId: string) => void
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -18,6 +20,7 @@ const STATUS_DOT: Record<string, string> = {
   surfaced: "bg-foreground",
   running: "bg-blue-500 animate-pulse",
   error: "bg-red-500",
+  cancelled: "bg-gray-400",
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -25,6 +28,7 @@ const STATUS_LABEL: Record<string, string> = {
   surfaced: "Surfaced",
   running: "Running",
   error: "Error",
+  cancelled: "Cancelled",
 }
 
 function formatRunTime(iso: string): string {
@@ -52,7 +56,7 @@ function formatDuration(startedAt: string, completedAt?: string): string | null 
   return `${Math.round(ms / 60_000)}m`
 }
 
-export function RunHistory({ runs, onViewActivity }: RunHistoryProps) {
+export function RunHistory({ runs, onViewActivity, onCancelRun }: RunHistoryProps) {
   const sorted = [...runs].sort(
     (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
   )
@@ -117,6 +121,17 @@ export function RunHistory({ runs, onViewActivity }: RunHistoryProps) {
                 View
                 <ArrowUpRight className="size-3" />
               </button>
+            )}
+            {run.status === "running" && onCancelRun && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => onCancelRun(run.id)}
+                aria-label="Stop run"
+                className="shrink-0"
+              >
+                <Square className="size-3" />
+              </Button>
             )}
           </li>
         )

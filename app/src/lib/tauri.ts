@@ -547,6 +547,10 @@ export const tauriRoutines = {
     call<void>("run_routine_now", () =>
       getEngine().runRoutineNow(agentPath, routineId),
     ),
+  cancelRun: (agentPath: string, routineId: string, runId: string) =>
+    call("cancel_routine_run", () =>
+      getEngine().cancelRoutineRun(agentPath, routineId, runId),
+    ),
   startScheduler: (agentPath: string) =>
     call<void>("start_routine_scheduler", () =>
       getEngine().startRoutineScheduler(agentPath),

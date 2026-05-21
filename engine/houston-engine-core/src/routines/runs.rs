@@ -23,6 +23,13 @@ pub fn list_for_routine(root: &Path, routine_id: &str) -> CoreResult<Vec<Routine
         .collect())
 }
 
+pub fn find_by_id(root: &Path, id: &str) -> CoreResult<RoutineRun> {
+    list(root)?
+        .into_iter()
+        .find(|r| r.id == id)
+        .ok_or_else(|| CoreError::NotFound(format!("routine run {id}")))
+}
+
 pub fn create(root: &Path, routine_id: &str) -> CoreResult<RoutineRun> {
     ensure_houston_dir(root)?;
     let mut runs = list(root)?;
@@ -146,6 +153,23 @@ mod tests {
         let d = TempDir::new().unwrap();
         assert!(matches!(
             update(d.path(), "nope", RoutineRunUpdate::default()).unwrap_err(),
+            CoreError::NotFound(_)
+        ));
+    }
+
+    #[test]
+    fn find_by_id_returns_run() {
+        let d = TempDir::new().unwrap();
+        let run = create(d.path(), "rid").unwrap();
+        let found = find_by_id(d.path(), &run.id).unwrap();
+        assert_eq!(found.id, run.id);
+    }
+
+    #[test]
+    fn find_by_id_missing_errors() {
+        let d = TempDir::new().unwrap();
+        assert!(matches!(
+            find_by_id(d.path(), "nope").unwrap_err(),
             CoreError::NotFound(_)
         ));
     }

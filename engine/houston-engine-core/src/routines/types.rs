@@ -75,7 +75,10 @@ pub struct RoutineUpdate {
 pub struct RoutineRun {
     pub id: String,
     pub routine_id: String,
-    /// `"running" | "silent" | "surfaced" | "error"`.
+    /// `"running" | "silent" | "surfaced" | "error" | "cancelled"`.
+    /// `cancelled` is set when the user stops an in-flight run via
+    /// `POST /v1/routines/:id/runs/:run_id:cancel` or when the parent
+    /// routine is deleted while a run is still in flight.
     pub status: String,
     /// Session key for chat history lookup (`"routine-{rid}-run-{id}"`).
     pub session_key: String,

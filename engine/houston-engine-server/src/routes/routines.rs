@@ -15,7 +15,7 @@ use houston_engine_core::preferences;
 use houston_engine_core::routines::{
     self,
     engine_dispatcher::{EngineActivitySurface, EngineRoutineDispatcher},
-    runner::run_routine,
+    runner::{cancel_run, run_routine},
     runs as routine_runs,
     types::{NewRoutine, Routine, RoutineRun, RoutineUpdate},
 };
@@ -48,6 +48,7 @@ pub fn router() -> Router<Arc<ServerState>> {
         .route("/routine-runs", get(list_runs))
         .route("/routine-runs/:id", patch(update_run))
         .route("/routines/:id/runs", post(create_run))
+        .route("/routines/:id/runs/:run_action", post(run_action))
         // Scheduler lifecycle + manual trigger
         .route("/routines/:id/run-now", post(run_now))
         .route("/routines/scheduler/start", post(scheduler_start))
@@ -88,7 +89,26 @@ async fn remove(
     Path(id): Path<String>,
     Query(q): Query<AgentQuery>,
 ) -> Result<(), ApiError> {
-    routines::delete(&agent_root(&q.agent_path), &id)?;
+    let root = agent_root(&q.agent_path);
+
+    // Cancel any in-flight runs before removing the routine. Without this,
+    // deleting a routine leaves the spawned session subprocess running and
+    // burning provider tokens — the user has no UI handle to stop it once
+    // the routine is gone.
+    for run in routine_runs::list_for_routine(&root, &id)? {
+        if run.status == "running" {
+            cancel_run(
+                &st.engine.sessions,
+                &st.engine.events,
+                &root,
+                &q.agent_path,
+                &run.id,
+            )
+            .await?;
+        }
+    }
+
+    routines::delete(&root, &id)?;
     st.routine_scheduler.sync_agent(&q.agent_path).await;
     Ok(())
 }
@@ -151,6 +171,33 @@ async fn run_now(
     )
     .await?;
     Ok(())
+}
+
+/// Sub-resource action dispatcher: `POST /routines/:id/runs/:run_id:cancel`.
+/// Following the same `key:action` convention as `sessions/:key:cancel`.
+async fn run_action(
+    State(st): State<Arc<ServerState>>,
+    Path((_routine_id, run_action)): Path<(String, String)>,
+    Query(q): Query<AgentQuery>,
+) -> Result<Json<RoutineRun>, ApiError> {
+    let run_id = match run_action.strip_suffix(":cancel") {
+        Some(k) if !k.is_empty() => k.to_string(),
+        _ => {
+            return Err(houston_engine_core::CoreError::BadRequest(format!(
+                "path action must be `:cancel`, got {run_action:?}"
+            ))
+            .into());
+        }
+    };
+    let updated = cancel_run(
+        &st.engine.sessions,
+        &st.engine.events,
+        &agent_root(&q.agent_path),
+        &q.agent_path,
+        &run_id,
+    )
+    .await?;
+    Ok(Json(updated))
 }
 
 async fn scheduler_start(

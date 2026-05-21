@@ -9,6 +9,7 @@ import {
   useUpdateRoutine,
   useDeleteRoutine,
   useRunRoutineNow,
+  useCancelRoutineRun,
 } from "../../hooks/queries";
 import { useTimezonePreference } from "../../hooks/use-timezone-preference";
 import type { TabProps } from "../../lib/types";
@@ -57,6 +58,7 @@ export default function RoutinesTab({ agent }: TabProps) {
   const updateRoutine = useUpdateRoutine(path);
   const deleteRoutine = useDeleteRoutine(path);
   const runNow = useRunRoutineNow(path);
+  const cancelRun = useCancelRoutineRun(path);
 
   const [view, setView] = useState<View>({ type: "grid" });
   const [form, setForm] = useState<RoutineFormData>(EMPTY_FORM);
@@ -146,6 +148,13 @@ export default function RoutinesTab({ agent }: TabProps) {
     [runNow],
   );
 
+  const handleCancelRun = useCallback(
+    (routineId: string, runId: string) => {
+      cancelRun.mutate({ routineId, runId });
+    },
+    [cancelRun],
+  );
+
   // `useTimezonePreference` auto-seeds on first call, so `tz.timezone` is
   // non-null from the first render. We still wait for the roundtrip to
   // finish so the cron schedule renders against the real zone instead of
@@ -175,6 +184,11 @@ export default function RoutinesTab({ agent }: TabProps) {
         routine={editing}
         runs={editingRuns}
         onRunNow={editing ? () => handleRunNow(editing.id) : undefined}
+        onCancelRun={
+          editing
+            ? (runId: string) => handleCancelRun(editing.id, runId)
+            : undefined
+        }
         onToggle={
           editing ? (enabled) => handleToggle(editing.id, enabled) : undefined
         }

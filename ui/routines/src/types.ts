@@ -19,7 +19,7 @@ export interface Routine {
   updated_at: string
 }
 
-export type RunStatus = "running" | "silent" | "surfaced" | "error"
+export type RunStatus = "running" | "silent" | "surfaced" | "error" | "cancelled"
 
 export interface RoutineRun {
   id: string

@@ -9,7 +9,7 @@
     "properties": {
       "id": { "type": "string" },
       "routine_id": { "type": "string" },
-      "status": { "type": "string", "enum": ["running", "silent", "surfaced", "error"] },
+      "status": { "type": "string", "enum": ["running", "silent", "surfaced", "error", "cancelled"] },
       "session_key": { "type": "string" },
       "activity_id": { "type": "string" },
       "summary": { "type": "string" },
