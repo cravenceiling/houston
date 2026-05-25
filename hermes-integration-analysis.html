@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Houston × Hermes Agent — Integration Analysis</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --ink: #1e2530;
+    --muted: #5b6573;
+    --faint: #8a93a2;
+    --line: #e4e7ec;
+    --houston: #4f46e5;     /* indigo */
+    --houston-soft: #eef0fe;
+    --hermes: #d97706;      /* amber */
+    --hermes-soft: #fdf3e3;
+    --pro: #15803d;
+    --pro-soft: #e7f6ec;
+    --con: #b42318;
+    --con-soft: #fdeceb;
+    --keep: #1d4ed8;
+    --keep-soft: #e8effd;
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.06);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 22px 96px; }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .88em;
+  }
+  code {
+    background: #eef1f5; padding: 1px 6px; border-radius: 6px; color: #2b3340;
+    border: 1px solid #e2e6ec;
+  }
+
+  /* ---- Header ---- */
+  header.hero {
+    background:
+      radial-gradient(1100px 360px at 12% -10%, #eef0fe 0%, rgba(238,240,254,0) 60%),
+      radial-gradient(900px 320px at 92% -20%, #fdf3e3 0%, rgba(253,243,227,0) 55%),
+      #ffffff;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .wrap { padding-top: 54px; padding-bottom: 38px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--houston); background: var(--houston-soft);
+    padding: 6px 12px; border-radius: 999px; border: 1px solid #dfe2fb;
+  }
+  h1 { font-size: 40px; line-height: 1.12; margin: 18px 0 10px; letter-spacing: -.02em; }
+  h1 .x { color: var(--faint); font-weight: 400; padding: 0 6px; }
+  h1 .hou { color: var(--houston); }
+  h1 .her { color: var(--hermes); }
+  .sub { font-size: 18px; color: var(--muted); max-width: 70ch; margin: 0 0 22px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--faint); }
+  .meta .chip {
+    background: #fff; border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 12px; color: var(--muted);
+  }
+
+  /* ---- Layout primitives ---- */
+  section { margin-top: 54px; }
+  h2 {
+    font-size: 24px; letter-spacing: -.01em; margin: 0 0 6px;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  h2 .num {
+    flex: none; font-size: 13px; font-weight: 700; color: var(--houston);
+    background: var(--houston-soft); border: 1px solid #dfe2fb;
+    width: 30px; height: 30px; border-radius: 9px;
+    display: inline-flex; align-items: center; justify-content: center;
+    transform: translateY(-2px);
+  }
+  h3 { font-size: 17.5px; margin: 26px 0 8px; letter-spacing: -.01em; }
+  .lead { color: var(--muted); margin: 4px 0 18px; max-width: 78ch; }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin: 5px 0; }
+  a { color: var(--houston); text-decoration: none; border-bottom: 1px solid #cfd4f7; }
+  a:hover { border-color: var(--houston); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 22px 24px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 760px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+  /* ---- Callouts ---- */
+  .callout { border-radius: var(--radius); padding: 18px 20px 18px 22px; border: 1px solid; }
+  .callout h4 { margin: 0 0 6px; font-size: 15px; letter-spacing: .01em; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.verdict { background: linear-gradient(180deg,#fffdf8,#fff); border-color: #f0dcb4; border-left: 5px solid var(--hermes); }
+  .callout.keep { background: var(--keep-soft); border-color: #cfdcfb; border-left: 5px solid var(--keep); }
+  .callout.warn { background: var(--con-soft); border-color: #f4cdca; border-left: 5px solid var(--con); }
+  .callout.good { background: var(--pro-soft); border-color: #c6e7d1; border-left: 5px solid var(--pro); }
+
+  /* ---- Tags ---- */
+  .tag {
+    display: inline-block; font-size: 12px; font-weight: 600; line-height: 1;
+    padding: 5px 9px; border-radius: 7px; border: 1px solid transparent; white-space: nowrap;
+  }
+  .tag.rust { background:#fdeee6; color:#b4500f; border-color:#f4d4c0; }
+  .tag.py   { background:#eef6ec; color:#3a7d2c; border-color:#cfe7c8; }
+  .tag.http { background:#e8effd; color:#274bc7; border-color:#cfdcfb; }
+  .tag.ts   { background:#e7f1fb; color:#1f6fb0; border-color:#cfe2f4; }
+  .tag.neu  { background:#eef1f5; color:#4a5260; border-color:#e0e4ea; }
+
+  /* ---- Tables ---- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; background: #fff; }
+  th, td { text-align: left; padding: 12px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { background: #fafbfc; font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) td { background: #fbfcfd; }
+  td.col-hou { color: #2b3340; }
+  .verdict-cell { font-weight: 650; white-space: nowrap; }
+  .v-keep { color: var(--keep); }
+  .v-replace { color: var(--hermes); }
+  .v-conflict { color: var(--con); }
+  .v-win { color: var(--pro); }
+
+  /* ---- Pipeline diagram ---- */
+  .pipe { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0; }
+  .pipe .node {
+    background: #fff; border: 1px solid var(--line); border-radius: 11px;
+    padding: 11px 13px; font-size: 13px; min-width: 96px; text-align: center;
+    box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  }
+  .pipe .node b { font-size: 13.5px; }
+  .pipe .node small { color: var(--faint); font-size: 11.5px; }
+  .pipe .node.hou { border-color:#c9cdf6; background:#f8f9ff; }
+  .pipe .node.her { border-color:#f0d6a8; background:#fffdf6; }
+  .pipe .node.cli { border-color:#cfe2f4; background:#f7fbff; }
+  .pipe .arr { align-self: center; color: var(--faint); padding: 0 9px; font-size: 18px; flex: none; }
+  .pipe .arr small { display:block; font-size:10px; line-height:1; text-align:center; color:var(--faint); }
+  .diagram-label { font-size: 12.5px; color: var(--faint); margin: 0 0 10px; font-weight: 600; letter-spacing:.03em; text-transform: uppercase; }
+
+  /* ---- Option cards ---- */
+  .opt { position: relative; }
+  .opt .badge {
+    position: absolute; top: -11px; right: 16px; font-size: 11.5px; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px; letter-spacing: .03em;
+  }
+  .opt.rec { border-color:#bfe0c9; box-shadow: 0 0 0 3px #e7f6ec, var(--shadow); }
+  .opt.rec .badge { background: var(--pro); color: #fff; }
+  .opt .badge.meh { background:#fde9cf; color:#9a5b04; border:1px solid #f3d6a6; }
+  .opt .badge.no  { background:#fbe0dd; color:#9a2018; border:1px solid #f3c4bf; }
+  .opt h3 { margin-top: 2px; }
+  .effort { font-size: 12.5px; color: var(--faint); margin-top: 10px; }
+  .effort b { color: var(--muted); }
+
+  /* ---- TOC ---- */
+  .toc { columns: 2; column-gap: 28px; font-size: 14.5px; }
+  @media (max-width: 600px) { .toc { columns: 1; } }
+  .toc a { display: block; padding: 3px 0; border: none; color: var(--muted); }
+  .toc a:hover { color: var(--houston); }
+  .toc .n { color: var(--faint); font-variant-numeric: tabular-nums; margin-right: 8px; }
+
+  footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--faint); font-size: 13px; }
+  .src { font-size: 13px; color: var(--muted); }
+  .src code { font-size: .82em; }
+  hr.soft { border: none; border-top: 1px dashed var(--line); margin: 22px 0; }
+  .kbd { font-size:12px; color:var(--faint); }
+  .pill-list { display:flex; flex-wrap:wrap; gap:7px; margin: 6px 0 4px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Architecture Analysis · Internal</span>
+    <h1><span class="hou">Houston</span><span class="x">×</span><span class="her">Hermes&nbsp;Agent</span></h1>
+    <p class="sub">Should Hermes Agent replace the Claude&nbsp;Code / Codex / Gemini CLIs as the “brain” behind Houston? A grounded look at what fits, what fights, what we keep, and the proxy in the middle.</p>
+    <div class="meta">
+      <span class="chip">Prepared for the Houston engine team</span>
+      <span class="chip">Scope: <code>engine/</code> provider layer + wire protocol</span>
+      <span class="chip">Verdict: additive, not wholesale</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- VERDICT -->
+  <section style="margin-top:38px">
+    <div class="callout verdict">
+      <h4>⊕ Bottom line</h4>
+      <p><b>Don’t make Hermes the wholesale desktop “brain.”</b> The CLIs Houston shells out to are doing <em>two</em> jobs at once — they are the LLM client <em>and</em> the agent harness (tool loop, file edits, session state). Hermes is <em>also</em> both. So “use Hermes instead of the CLIs” is not swapping an LLM client; it is swapping one entire agent operating system for another that overlaps ~70% with what the Rust engine already owns (sessions, skills, memory, cron, tools, its own SQLite store).</p>
+      <p style="margin-top:12px"><b>Recommended shape:</b> adopt Hermes <em>additively</em> as one more <code>ProviderAdapter</code> (an HTTP adapter instead of a subprocess one) <span class="tag http">HTTP</span>, and make it the strategic home for the <b>server-side</b> products (Always&nbsp;On / Teams) where a heavyweight autonomous Python agent is an asset rather than a liability. Keep the CLIs for the desktop default. This reuses Houston’s existing “adding a provider” recipe almost verbatim and bets nothing.</p>
+      <p style="margin-top:12px"><b>The proxy you intuited is real and necessary</b> — but it already exists. It’s the <code>houston-engine</code> wire protocol (<code>/v1/*</code> REST + <code>/v1/ws</code> firehose). The frontend (desktop, mobile, examples) <em>never</em> talks to a provider directly; it only talks to that contract. Whatever the brain is, that contract stays fixed. See §6.</p>
+    </div>
+  </section>
+
+  <!-- TOC -->
+  <section>
+    <div class="card">
+      <div class="diagram-label">Contents</div>
+      <nav class="toc">
+        <a href="#today"><span class="n">1</span>How Houston’s brain works today</a>
+        <a href="#hermes"><span class="n">2</span>What Hermes Agent actually is</a>
+        <a href="#overlap"><span class="n">3</span>Concept overlap — who owns what</a>
+        <a href="#pros"><span class="n">4</span>Pros — the genuine wins</a>
+        <a href="#cons"><span class="n">5</span>Cons &amp; risks — the frictions</a>
+        <a href="#keep"><span class="n">6</span>What we keep no matter what</a>
+        <a href="#options"><span class="n">7</span>Three integration options</a>
+        <a href="#mapping"><span class="n">8</span>The translation layer (the “proxy”)</a>
+        <a href="#blockers"><span class="n">9</span>Open questions to verify first</a>
+        <a href="#reco"><span class="n">10</span>Recommendation &amp; sequencing</a>
+      </nav>
+    </div>
+  </section>
+
+  <!-- 1. TODAY -->
+  <section id="today">
+    <h2><span class="num">1</span>How Houston’s brain works today</h2>
+    <p class="lead">Houston is a Tauri desktop app whose React frontend talks <em>only</em> to a standalone Rust binary, <code>houston-engine</code>, over HTTP+WS. The engine is what actually drives a model: for every conversation turn it spawns a provider <b>CLI subprocess</b>, streams its NDJSON output back, and persists the result.</p>
+
+    <div class="card">
+      <div class="diagram-label">Today — one subprocess per turn</div>
+      <div class="pipe">
+        <div class="node hou"><b>Frontend</b><small>React · mobile</small></div>
+        <span class="arr">→<small>HTTP/WS</small></span>
+        <div class="node hou"><b>houston-engine</b><small>Rust sidecar</small></div>
+        <span class="arr">→<small>spawn</small></span>
+        <div class="node cli"><b>claude / codex / gemini</b><small>CLI subprocess</small></div>
+        <span class="arr">→<small>HTTPS</small></span>
+        <div class="node cli"><b>Provider API</b><small>Anthropic · OpenAI · Google</small></div>
+      </div>
+      <hr class="soft" />
+      <div class="grid2">
+        <div>
+          <h3 style="margin-top:0">What the engine builds per provider</h3>
+          <p class="src">Each provider is a <code>ProviderAdapter</code> in a static <code>REGISTRY</code> (<code>provider/mod.rs</code>). A turn is routed through <code>session_dispatch.rs</code> to a provider-specific runner that assembles a command line:</p>
+          <ul class="src">
+            <li><b>Claude</b> — <code>claude -p --output-format stream-json --include-partial-messages --system-prompt … --model … --resume …</code>; prompt on stdin.</li>
+            <li><b>Codex</b> — <code>codex exec --json -c developer_instructions={…} -c model_reasoning_effort=… --model … resume …</code>; prompt on stdin.</li>
+            <li><b>Gemini</b> — <code>gemini --output-format stream-json --yolo --resume …</code>; system prompt wrapped in <code>&lt;system&gt;…&lt;/system&gt;</code> on stdin.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin-top:0">What the engine owns around the call</h3>
+          <ul class="src">
+            <li><b>Streaming:</b> three bespoke NDJSON parsers (<code>parser.rs</code>, <code>codex_parser.rs</code>, <code>gemini_parser_state.rs</code>) reassemble deltas into typed <code>FeedItem</code>s and push them onto the WS firehose.</li>
+            <li><b>History:</b> libSQL <code>chat_feed</code> table (durable, unbounded), keyed by session id; replayed via <code>/history</code>.</li>
+            <li><b>Agent state:</b> files-first — <code>.houston/&lt;type&gt;/&lt;type&gt;.json</code> (activity, routines, config, learnings) + a <code>notify</code> file-watcher that turns agent-side writes into events.</li>
+            <li><b>Provider + model:</b> per-agent in <code>.houston/config/config.json</code>; switched live via <code>PATCH /v1/workspaces/:id/provider</code>.</li>
+            <li><b>Scheduling:</b> <code>houston-scheduler</code> fires cron <code>routines</code> → starts a normal provider turn.</li>
+            <li><b>Errors:</b> a typed <code>ProviderError</code> taxonomy with per-provider stderr/result classifiers; every failure becomes a user-visible card (no silent failures).</li>
+            <li><b>Distribution:</b> the signed <code>.app</code> bundles <code>codex</code>+<code>composio</code>+<code>gemini</code> (~940&nbsp;MB) and runtime-downloads proprietary <code>claude-code</code>; Windows also extracts a portable git-bash.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top:14px"><b>The load-bearing insight:</b> the CLI is not just “the model.” It is Houston’s tool-execution sandbox (Edit/Write/Bash run in the agent’s working directory, which is exactly why the file-watcher reactivity works), its auth surface (subscription OAuth via <code>claude auth login</code> / <code>codex login</code>), and its streaming protocol. Replacing it touches all of those at once.</p>
+  </section>
+
+  <!-- 2. HERMES -->
+  <section id="hermes">
+    <h2><span class="num">2</span>What Hermes Agent actually is</h2>
+    <p class="lead">Hermes Agent (Nous Research, <span class="tag py">Python 3.11 + Node 22</span>, <b>MIT</b>, <code>github.com/NousResearch/hermes-agent</code>) is a complete autonomous agent runtime — not a model gateway. It happens to <em>expose</em> an OpenAI-compatible HTTP server, but behind that server is a full agent OS.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0">The API server <span class="tag http">OpenAI-compatible</span></h3>
+        <p class="src">Enabled via <code>~/.hermes/.env</code> (<code>API_SERVER_ENABLED=true</code>, <code>API_SERVER_KEY=…</code>), started with <code>hermes gateway</code>, listening on <code>127.0.0.1:8642</code>. Bearer-token auth. Endpoints:</p>
+        <ul class="src">
+          <li><code>POST /v1/chat/completions</code> — standard Chat Completions, SSE streaming with custom <code>hermes.tool.progress</code> events.</li>
+          <li><code>POST /v1/responses</code> — server-side conversation state via <code>previous_response_id</code> / named conversations. <b>Caps at 100 stored responses (LRU).</b></li>
+          <li><code>POST /v1/runs</code> → <code>run_id</code>; <code>GET /v1/runs/{id}/events</code> (SSE tool-progress + tokens); <code>POST /v1/runs/{id}/stop</code>.</li>
+          <li><code>GET /v1/models</code>, <code>GET /v1/capabilities</code>, <code>GET /health</code>.</li>
+          <li><code>/api/jobs</code> — CRUD for scheduled / background runs (pause / resume / manual trigger).</li>
+        </ul>
+        <p class="src" style="margin-bottom:0"><b>Key constraint:</b> over the API, “the <code>model</code> field is cosmetic; the actual LLM is configured server-side.” You change models by changing the <em>profile</em>, not per request.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">The agent OS behind it</h3>
+        <ul class="src">
+          <li><b>Providers</b> via API keys in <code>~/.hermes/.env</code>: openrouter, nous, openai, anthropic, copilot, deepseek, gemini, minimax, xai, ollama-cloud, bedrock, azure-foundry, custom (<code>OPENAI_BASE_URL</code>). Three API modes: <code>chat_completions</code>, <code>codex_responses</code>, <code>anthropic_messages</code>.</li>
+          <li><b>Tools:</b> 70+ tools across ~28 toolsets (terminal, browser, web, file, vision, MCP), executed on one of 7 <b>terminal backends</b> (local, Docker, SSH, Daytona, Modal, Singularity, Vercel Sandbox).</li>
+          <li><b>Skills:</b> <code>~/.hermes/skills/</code>, <b>agentskills.io-compatible</b> <code>SKILL.md</code> — the <em>same open standard Houston uses</em>. Skills Hub pulls from skills.sh, GitHub, <code>/.well-known/skills</code>, custom taps.</li>
+          <li><b>Memory:</b> <code>MEMORY.md</code> + <code>USER.md</code> in <code>~/.hermes/memories/</code>, plus a self-improvement loop and <code>state.db</code> SQLite + FTS5 <code>session_search</code>.</li>
+          <li><b>Multi-agent:</b> <b>profiles</b> — <code>hermes -p &lt;name&gt;</code> gives each agent its own <code>HERMES_HOME</code>, config, memory, sessions, and gateway PID. Concurrent. Shareable as “profile distributions.”</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout keep" style="margin-top:18px">
+      <h4>The uncomfortable symmetry</h4>
+      <p>Read that second column again next to §1. Hermes ships its own version of nearly everything the Houston engine already implemented in Rust: sessions, durable store, skills (same standard), memory/learnings, cron jobs, MCP, multi-agent isolation, tool execution. Hermes is not a missing piece that slots into Houston — it is a <em>parallel</em> Houston with a different runtime and a different opinion about who owns state.</p>
+    </div>
+  </section>
+
+  <!-- 3. OVERLAP -->
+  <section id="overlap">
+    <h2><span class="num">3</span>Concept overlap — who owns what</h2>
+    <p class="lead">Mapping each concern Houston handles today onto Hermes. “Verdict” is what happens to that concern if Hermes becomes the brain.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Concern</th><th>Houston today</th><th>Hermes equivalent</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>LLM call</b></td>
+            <td class="col-hou">Provider CLI shells out to the API</td>
+            <td>Provider resolution → API key, 3 API modes</td>
+            <td class="verdict-cell v-replace">Cleanly replaced</td>
+          </tr>
+          <tr>
+            <td><b>Tool loop / code execution</b></td>
+            <td class="col-hou">CLI’s built-in tools, run in the agent working dir</td>
+            <td>70+ tools on 7 terminal backends</td>
+            <td class="verdict-cell v-conflict">Overlap — must pin to <code>local</code> backend rooted at the agent dir, or file-watcher reactivity breaks</td>
+          </tr>
+          <tr>
+            <td><b>Sessions / history</b></td>
+            <td class="col-hou">libSQL <code>chat_feed</code> — durable, unbounded</td>
+            <td><code>state.db</code> + <code>/v1/responses</code> store (100 LRU)</td>
+            <td class="verdict-cell v-keep">Houston must keep owning history; the 100-cap rules out Hermes server-state as source of truth</td>
+          </tr>
+          <tr>
+            <td><b>Skills</b></td>
+            <td class="col-hou"><code>.agents/skills</code> — agentskills.io</td>
+            <td><code>~/.hermes/skills</code> — agentskills.io</td>
+            <td class="verdict-cell v-win">Same standard → largely portable. Reconcile the directory.</td>
+          </tr>
+          <tr>
+            <td><b>Memory / learnings</b></td>
+            <td class="col-hou"><code>.houston/learnings.json</code></td>
+            <td><code>MEMORY.md</code> / <code>USER.md</code> + <code>session_search</code></td>
+            <td class="verdict-cell v-conflict">Two sources of truth — pick one or they drift</td>
+          </tr>
+          <tr>
+            <td><b>Cron / routines</b></td>
+            <td class="col-hou"><code>houston-scheduler</code> + <code>.houston/routines</code></td>
+            <td><code>/api/jobs</code> (own scheduler)</td>
+            <td class="verdict-cell v-conflict">Keep Houston’s — it feeds files-first reactivity the UI depends on</td>
+          </tr>
+          <tr>
+            <td><b>Provider + model selection</b></td>
+            <td class="col-hou">Per-agent, switched live via PATCH</td>
+            <td>Per-profile, server-side; cosmetic over API</td>
+            <td class="verdict-cell v-conflict">Direct friction with a core Houston UX</td>
+          </tr>
+          <tr>
+            <td><b>Auth</b></td>
+            <td class="col-hou">CLI OAuth (Claude / ChatGPT subscriptions) or API key</td>
+            <td>API keys (some OAuth: minimax, xai)</td>
+            <td class="verdict-cell v-conflict">Likely loses subscription sign-in → metered billing for non-technical users</td>
+          </tr>
+          <tr>
+            <td><b>MCP integrations</b></td>
+            <td class="col-hou">Composio CLI + <code>--mcp-config</code></td>
+            <td>Built-in MCP toolset</td>
+            <td class="verdict-cell v-replace">Replaceable (re-wire Composio onto Hermes MCP)</td>
+          </tr>
+          <tr>
+            <td><b>Multi-agent isolation</b></td>
+            <td class="col-hou"><code>workspaces/&lt;ws&gt;/&lt;agent&gt;</code> dirs</td>
+            <td>Profiles (own <code>HERMES_HOME</code> + PID each)</td>
+            <td class="verdict-cell v-conflict">A fleet of Hermes processes to mirror Houston’s many agents</td>
+          </tr>
+          <tr>
+            <td><b>Wire protocol → frontend</b></td>
+            <td class="col-hou"><code>/v1/*</code> REST + <code>/v1/ws</code> firehose of <code>HoustonEvent</code></td>
+            <td>OpenAI-shaped, not Houston-shaped</td>
+            <td class="verdict-cell v-keep">Must be preserved by a translation layer (see §6, §8)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. PROS -->
+  <section id="pros">
+    <h2><span class="num">4</span>Pros — the genuine wins</h2>
+    <div class="grid2">
+      <div class="callout good">
+        <h4>① Kills the CLI-bundling problem</h4>
+        <p>Today the <code>.app</code> carries ~940&nbsp;MB of CLIs, a runtime <code>claude-code</code> download, a per-arch Composio fork build, a Windows git-bash extraction, and “Gemini is macOS-only in v1.” Talking to provider <em>APIs</em> via keys deletes that entire apparatus and its release-CI signing/notarization burden.</p>
+      </div>
+      <div class="callout good">
+        <h4>② Many more providers/models</h4>
+        <p>From 3 CLIs to a dozen API providers (OpenRouter, Nous, DeepSeek, xAI, Bedrock, Azure, Ollama, custom OpenAI-compatible endpoints). Massive reach for power users with one credential model.</p>
+      </div>
+      <div class="callout good">
+        <h4>③ One streaming protocol, not three</h4>
+        <p>The three bespoke NDJSON parsers collapse into a single SSE consumer. <code>codex_parser.rs</code>, <code>gemini_parser_state.rs</code>, and the Claude stream accumulator are a real maintenance tax that one Hermes adapter would retire.</p>
+      </div>
+      <div class="callout good">
+        <h4>④ Shared skills standard</h4>
+        <p>Both sides speak agentskills.io <code>SKILL.md</code>. Houston’s skills are largely portable to Hermes and vice-versa — the integration doesn’t fork the ecosystem.</p>
+      </div>
+      <div class="callout good">
+        <h4>⑤ Philosophical alignment</h4>
+        <p>Hermes is MIT and open-source, like the Houston engine. It can be forked, pinned, or embedded. And its autonomy (memory, self-improvement, jobs) is a strong match for the <b>Always&nbsp;On</b> 24/7 vision.</p>
+      </div>
+      <div class="callout good">
+        <h4>⑥ Still reaches Claude &amp; Codex</h4>
+        <p>The <code>anthropic_messages</code> and <code>codex_responses</code> API modes mean adopting Hermes does <em>not</em> drop access to the models users already want — it just reaches them over the API instead of the CLI.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. CONS -->
+  <section id="cons">
+    <h2><span class="num">5</span>Cons &amp; risks — the frictions</h2>
+    <div class="grid2">
+      <div class="callout warn">
+        <h4>① A Python+Node runtime on the desktop</h4>
+        <p>The engine is one pure-Rust sidecar binary. Hermes needs Python 3.11, Node 22, uv, ripgrep, ffmpeg. Bundling that on a <b>non-technical user’s laptop</b> is arguably <em>heavier</em> than today’s CLIs — you’d trade three binaries for a full interpreter environment. This mostly makes sense only server-side.</p>
+      </div>
+      <div class="callout warn">
+        <h4>② Two agent OSes, one product</h4>
+        <p>Hermes owns sessions, skills, memory, cron, tools, and a store. So does Houston. You must either <b>(a)</b> demote the engine to a thin proxy and let Hermes own state — abandoning Houston’s files-first reactivity and <code>.houston/</code> identity — or <b>(b)</b> keep Houston owning state and run Hermes with its own features <em>disabled</em>, fighting it the whole way.</p>
+      </div>
+      <div class="callout warn">
+        <h4>③ “Model is cosmetic” vs. live model switching</h4>
+        <p>Houston’s UX is per-agent provider+model, switchable live. Over Hermes’ API, model is server-side config. To preserve the picker you’d run <b>one Hermes profile/port per (provider, model)</b> — a process fleet — or reconfigure-and-restart. Neither matches today’s per-turn <code>--model</code> flag.</p>
+      </div>
+      <div class="callout warn">
+        <h4>④ Loss of subscription sign-in</h4>
+        <p>Today users authenticate with their Claude / ChatGPT <em>subscriptions</em> via CLI OAuth — no API key, no metered bill. Hermes is API-key-first. For Houston’s explicitly non-technical audience, “paste an API key and pay per token” is a real onboarding + cost regression. <span class="kbd">(Verify whether Hermes supports subscription OAuth for Anthropic/OpenAI — §9.)</span></p>
+      </div>
+      <div class="callout warn">
+        <h4>⑤ Reactivity depends on local file writes</h4>
+        <p>Houston’s “the agent edited your project, UI updates instantly” loop relies on tool writes landing on the local filesystem in the agent dir, caught by the watcher. Hermes’ Docker/SSH/Daytona/Modal backends execute elsewhere. You must pin Hermes to the <code>local</code> backend rooted exactly at the agent working dir, or the reactivity story silently breaks.</p>
+      </div>
+      <div class="callout warn">
+        <h4>⑥ Maturity &amp; single-vendor coupling</h4>
+        <p>Today’s CLIs come from Anthropic/OpenAI/Google with relatively stable contracts. Hermes is young, fast-moving, and from one lab. Betting the product’s “brain” on it couples Houston’s reliability and release cadence to Hermes’.</p>
+      </div>
+    </div>
+    <div class="callout warn" style="margin-top:18px">
+      <h4>⑦ The clean win doesn’t actually require Hermes</h4>
+      <p>The most attractive pro — “kill CLI bundling, get many providers via API keys” — is achievable with a <b>direct Rust HTTP provider adapter</b> (Anthropic Messages / OpenAI / OpenRouter) plus Houston’s own tool loop, without importing a second agent runtime. Hermes’ <em>distinctive</em> value is its autonomy, tools, and memory — and those only pay for themselves server-side, where you actually want a long-lived self-improving agent. Be honest about which problem you’re solving before paying Hermes’ integration cost.</p>
+    </div>
+  </section>
+
+  <!-- 6. KEEP -->
+  <section id="keep">
+    <h2><span class="num">6</span>What we keep no matter what</h2>
+    <p class="lead">This is the reassuring part of your question. The frontend is insulated from the brain by design. Regardless of which option we pick, these stay exactly as they are:</p>
+    <div class="card">
+      <ul>
+        <li><b>The entire <code>houston-engine</code> wire protocol</b> — <code>/v1/*</code> REST (17 route modules: workspaces, agents, sessions, files, routines, skills, store, preferences, providers, …) and the <code>/v1/ws</code> firehose of <code>HoustonEvent</code>. This <em>is</em> the proxy you described. The desktop app, mobile PWA, and the <code>smartbooks</code> example consumer all speak only this. It is the stable interface; the brain is an implementation detail behind it.</li>
+        <li><b>Files-first reactivity</b> — <code>.houston/</code> data surfaces + the <code>notify</code> file-watcher + TanStack-Query invalidation. This is Houston’s identity and must keep owning state.</li>
+        <li><b>The <code>ProviderError</code> → <code>FeedItem</code> → toast surfacing path</b> — the no-silent-failures policy. Hermes errors get classified into the existing taxonomy; the frontend cards are unchanged.</li>
+        <li><b>The product system prompt + non-technical voice</b> (<code>houston_prompt.rs</code>) — still injected, now as Hermes <code>instructions</code> rather than a CLI <code>--system-prompt</code> flag.</li>
+        <li><b>Workspaces / agents / Store / agent-manifest</b> — the organizing model above the brain.</li>
+      </ul>
+    </div>
+    <p style="margin-top:14px">In other words: the work is <b>entirely behind the <code>POST /v1/agents/:path/sessions</code> boundary.</b> Above it, nothing changes. Below it, the runner stops spawning a CLI and starts driving Hermes.</p>
+  </section>
+
+  <!-- 7. OPTIONS -->
+  <section id="options">
+    <h2><span class="num">7</span>Three integration options</h2>
+    <div class="grid3">
+
+      <div class="card opt">
+        <span class="badge no">Risky</span>
+        <h3>A · Wholesale brain swap</h3>
+        <p class="src">The engine keeps its wire contract but every turn is delegated to Hermes for <em>all</em> providers. The CLIs are removed.</p>
+        <p class="src"><b>Cost:</b> ship/host Python+Node; resolve the double-OS state ownership; rebuild auth around API keys; rebuild model-switching as a profile fleet.</p>
+        <div class="effort"><b>Effort:</b> very high · <b>Risk:</b> high · <b>Reversibility:</b> low</div>
+      </div>
+
+      <div class="card opt rec">
+        <span class="badge">Recommended</span>
+        <h3>B · One more provider adapter</h3>
+        <p class="src">Add <code>provider/hermes.rs</code> as an <b>HTTP</b> adapter beside the subprocess ones. Users point an agent at a Hermes endpoint (local or remote). Claude/Codex/Gemini CLIs stay untouched.</p>
+        <p class="src"><b>Cost:</b> one adapter file + registry entry + 3 dispatch arms (the existing recipe) + an SSE→FeedItem parser + error classifiers.</p>
+        <div class="effort"><b>Effort:</b> moderate · <b>Risk:</b> low · <b>Reversibility:</b> high</div>
+      </div>
+
+      <div class="card opt">
+        <span class="badge meh">Strategic</span>
+        <h3>C · Server-side engine option</h3>
+        <p class="src">Run Hermes on the VPS for <b>Always&nbsp;On / Teams</b>, where a 24/7 autonomous Python agent is a feature and a Python runtime is normal. A thin shim fronts it with the Houston wire protocol.</p>
+        <p class="src"><b>Cost:</b> the §8 translation layer, deployed server-side; no desktop bundling.</p>
+        <div class="effort"><b>Effort:</b> moderate · <b>Risk:</b> medium · <b>Reversibility:</b> high</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="diagram-label">Option B — Hermes slots into the existing registry (nothing else moves)</div>
+      <div class="pipe">
+        <div class="node hou"><b>Frontend</b><small>unchanged</small></div>
+        <span class="arr">→</span>
+        <div class="node hou"><b>houston-engine</b><small>same /v1/* + WS</small></div>
+        <span class="arr">→<small>dispatch</small></span>
+        <div class="node cli"><b>claude / codex / gemini</b><small>subprocess adapters</small></div>
+      </div>
+      <div class="pipe" style="margin-top:10px">
+        <div class="node" style="visibility:hidden"><b>·</b></div>
+        <span class="arr" style="visibility:hidden">→</span>
+        <div class="node" style="visibility:hidden"><b>·</b></div>
+        <span class="arr">↘<small>or</small></span>
+        <div class="node her"><b>hermes</b><small>HTTP adapter → /v1/runs</small></div>
+        <span class="arr">→</span>
+        <div class="node her"><b>Hermes server</b><small>local or remote</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. MAPPING -->
+  <section id="mapping">
+    <h2><span class="num">8</span>The translation layer (the “proxy”)</h2>
+    <p class="lead">Whether it lives inside a <code>hermes.rs</code> adapter (Option B) or a server-side shim (Option C), this is the concrete glue. Three mappings: requests, the event stream, and errors.</p>
+
+    <h3>8.1 Session turn → Hermes API</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Houston operation</th><th>Hermes call</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST /v1/agents/:path/sessions</code><br><span class="src">{prompt, systemPrompt, provider, model, effort}</span></td><td><code>POST /v1/runs</code><br><span class="src">{input, instructions: systemPrompt}</span></td><td>Prefer <code>/v1/runs</code> over chat-completions for first-class tool-progress SSE. <code>model</code> is cosmetic → the (provider, model) selects which Hermes profile/endpoint to hit.</td></tr>
+          <tr><td>stream the turn</td><td><code>GET /v1/runs/{id}/events</code> (SSE)</td><td>Parse SSE → <code>FeedItem</code>s → WS firehose (see 8.2).</td></tr>
+          <tr><td><code>:cancel</code> (SIGTERM the CLI)</td><td><code>POST /v1/runs/{id}/stop</code></td><td>Maps to the existing <code>Cancelled</code> path — UI shows nothing.</td></tr>
+          <tr><td><code>GET …/history</code></td><td>— (stay in libSQL)</td><td>Houston keeps owning <code>chat_feed</code>; replay the full message array to a stateless call. Do <b>not</b> rely on <code>/v1/responses</code> server state (100 LRU cap).</td></tr>
+          <tr><td><code>POST /v1/sessions/summarize</code></td><td>small <code>POST /v1/chat/completions</code></td><td>Or a Hermes auxiliary model. Already best-effort with a deterministic fallback.</td></tr>
+          <tr><td>routine fires (cron)</td><td><code>POST /v1/runs</code></td><td>Keep <code>houston-scheduler</code> as the trigger so <code>.houston/routines</code> stays the reactive source of truth; ignore Hermes <code>/api/jobs</code> to avoid a second scheduler.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>8.2 Hermes SSE event → Houston <code>FeedItem</code></h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Hermes stream event</th><th>Houston <code>FeedItem</code></th></tr></thead>
+        <tbody>
+          <tr><td>token / text delta</td><td><code>assistant_text_streaming</code> → finalized as <code>assistant_text</code></td></tr>
+          <tr><td>reasoning delta <span class="kbd">(if exposed — verify §9)</span></td><td><code>thinking_streaming</code> → <code>thinking</code></td></tr>
+          <tr><td><code>hermes.tool.progress</code> (start/update)</td><td>tool-call running state</td></tr>
+          <tr><td><code>hermes.tool.progress</code> (complete)</td><td><code>tool_result</code></td></tr>
+          <tr><td>finish + <code>usage</code></td><td><code>final_result</code> (with token usage)</td></tr>
+          <tr><td>SSE error / run failed</td><td><code>provider_error</code> (see 8.3)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>8.3 Hermes failure → <code>ProviderError</code> taxonomy</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Hermes signal</th><th><code>ProviderError</code> variant</th></tr></thead>
+        <tbody>
+          <tr><td>429 / upstream throttle</td><td><code>RateLimited</code> (+ <code>retry_after_seconds</code>)</td></tr>
+          <tr><td>billing / quota limit</td><td><code>QuotaExhausted</code></td></tr>
+          <tr><td>401 (bad/absent API key)</td><td><code>Unauthenticated</code> — note: now it’s the key, not CLI OAuth</td></tr>
+          <tr><td>model not in profile</td><td><code>ModelUnavailable</code></td></tr>
+          <tr><td>connect failure to Hermes/upstream</td><td><code>NetworkUnreachable</code></td></tr>
+          <tr><td>5xx</td><td><code>ProviderInternal</code></td></tr>
+          <tr><td>user stop</td><td><code>Cancelled</code></td></tr>
+          <tr><td>unparseable SSE / anything else</td><td><code>MalformedResponse</code> / <code>Unknown</code> (always “Report bug”)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src" style="margin-top:12px">All three tables are the literal contents of a new <code>provider/hermes.rs</code> adapter plus its parser and <code>classify_*</code> methods — which is exactly the shape the CLAUDE.md “Adding a provider” recipe already prescribes. The frontend renders every variant today; no UI work needed.</p>
+  </section>
+
+  <!-- 9. BLOCKERS -->
+  <section id="blockers">
+    <h2><span class="num">9</span>Open questions to verify before committing</h2>
+    <div class="card">
+      <ol>
+        <li><b>Subscription OAuth?</b> Can Hermes authenticate Anthropic/OpenAI via user <em>subscriptions</em> (Claude Pro / ChatGPT Plus), or is it API-key-only? This decides whether the desktop cost/onboarding story regresses for non-technical users. <span class="kbd">Likely the single biggest go/no-go for Option A.</span></li>
+        <li><b>Reasoning/thinking deltas.</b> Does the SSE stream expose reasoning tokens distinctly, so we can keep the <code>thinking</code> UI? If not, that surface degrades.</li>
+        <li><b>Per-request model.</b> Is “model is cosmetic” truly absolute, or is there a header/param to override per run without a profile? This decides whether live model switching needs a process fleet.</li>
+        <li><b>Pinning the <code>local</code> terminal backend</b> to the exact agent working dir, so file writes land where the watcher sees them (reactivity).</li>
+        <li><b>Tool-call fidelity.</b> Does <code>hermes.tool.progress</code> carry enough structure (tool name, args, result) to render Houston’s tool cards, and to compute the post-turn <code>file_changes</code> feed item?</li>
+        <li><b>Concurrency model.</b> Houston runs many sessions across many agents in parallel; how many concurrent runs does one Hermes gateway sustain, and does that force the per-agent profile/process fleet?</li>
+        <li><b>Resource footprint &amp; startup time</b> of a bundled Python+Node Hermes vs. today’s sidecar — for the desktop case only.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 10. RECO -->
+  <section id="reco">
+    <h2><span class="num">10</span>Recommendation &amp; sequencing</h2>
+    <div class="callout verdict">
+      <h4>Do this</h4>
+      <ol style="margin-bottom:0">
+        <li><b>Spike Option B now.</b> Build <code>provider/hermes.rs</code> as an HTTP adapter against a locally-run Hermes (<code>hermes gateway</code>), wire the §8 mappings, and let a single agent target it. Low risk, fully reversible, proves the streaming + error translation against a real Hermes. This satisfies “use Hermes” without betting anything.</li>
+        <li><b>Answer the §9 questions during the spike</b> — especially subscription OAuth and per-request model. They determine whether Option A is even viable for the desktop audience.</li>
+        <li><b>Make Hermes the brain for Option C (Always&nbsp;On / Teams), not the desktop.</b> Server-side is where Python is fine and where a long-lived, self-improving, tool-rich agent is a genuine product advantage. The same §8 layer deploys as a shim there.</li>
+        <li><b>Treat Option A as a future decision, gated on §9.</b> If subscription OAuth is unavailable, A regresses the core non-technical-user value prop — and the “many providers, no CLI bundle” win is better captured by a direct Rust API adapter than by adopting a second agent OS.</li>
+      </ol>
+    </div>
+    <p style="margin-top:16px"><b>One-line summary:</b> Houston already has the right seam (the provider registry + the wire protocol). Use it. Add Hermes as a provider and as a server-side engine — don’t dissolve Houston’s engine into a Hermes proxy.</p>
+  </section>
+
+  <footer>
+    <p class="src"><b>Grounding.</b> Houston side read from this repo: <code>knowledge-base/{architecture,engine-protocol,engine-server,cli-bundling,provider-errors}.md</code> and the engine provider layer (<code>provider/mod.rs</code>, <code>session_dispatch.rs</code>, <code>session_io.rs</code>, <code>parser.rs</code>, <code>codex_parser.rs</code>, <code>gemini_parser_state.rs</code>, <code>houston-db</code>, <code>houston-scheduler</code>). Hermes side from <code>hermes-agent.nousresearch.com/docs</code> (API server, configuration, architecture, skills, memory, installation). Items marked “verify” were not confirmable from public docs alone.</p>
+    <p>Houston × Hermes Agent — internal architecture analysis · light mode · self-contained.</p>
+  </footer>
+
+</div>
+</body>
+</html>
