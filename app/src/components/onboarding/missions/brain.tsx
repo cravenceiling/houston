@@ -16,8 +16,8 @@ import {
   type ProviderInfo,
   type ComingSoonProviderInfo,
 } from "../../../lib/providers";
-import { useClaudeInstall, type ClaudeInstallState } from "../use-claude-install";
-import { ClaudeInstallHint } from "../claude-install-hint";
+import { useClaudeInstall, type ClaudeInstallState } from "../../../hooks/use-claude-install";
+import { ClaudeInstallHint } from "../../shell/claude-install-hint";
 
 interface BrainMissionProps {
   provider: string | null;

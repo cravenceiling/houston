@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HoustonEvent } from "@houston-ai/core";
-import { subscribeHoustonEvents } from "../../lib/events";
-import { tauriClaude } from "../../lib/tauri";
-import { logger } from "../../lib/logger";
+import { subscribeHoustonEvents } from "../lib/events";
+import { tauriClaude } from "../lib/tauri";
+import { logger } from "../lib/logger";
 
 /**
  * Live state of the Anthropic Claude Code runtime install — the install
  * Houston runs on the user's behalf because the proprietary CLI can't
- * be bundled. Used by the onboarding "Sign in with Anthropic" card so
- * the user sees the real reason install failed (issue #231: a bad wifi
- * connection used to surface as the generic "install the claude CLI on
- * your machine" hint, which is wrong because Houston should be doing
- * the install).
+ * be bundled. Used by both the onboarding "Sign in with Anthropic" card
+ * and the Settings → Provider row so the user sees the real reason
+ * install failed (issue #231: a bad wifi connection used to surface as
+ * the generic "install the claude CLI on your machine" hint, which is
+ * wrong because Houston should be doing the install).
  */
 export interface ClaudeInstallState {
   /** True between `ClaudeCliInstalling` and `ClaudeCliReady`/`ClaudeCliFailed`. */

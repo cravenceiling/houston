@@ -1,13 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Download, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@houston-ai/core";
-import type { ClaudeInstallState } from "./use-claude-install";
+import type { ClaudeInstallState } from "../../hooks/use-claude-install";
 
 /**
  * Replacement for the generic "install the CLI yourself" hint when the
  * provider is Anthropic — Houston is supposed to download Claude Code
  * on the user's behalf, so when `cli_installed=false` we explain what
- * Houston tried, why it didn't work, and offer a Retry. See issue #231.
+ * Houston tried, why it didn't work, and offer a Retry. Shared by the
+ * onboarding brain card and the Settings → Provider row. See issue #231.
  */
 export function ClaudeInstallHint({ state }: { state: ClaudeInstallState }) {
   const { t } = useTranslation("providers");
