@@ -3,12 +3,16 @@
     "connected": "Connected",
     "notConnected": "Not connected",
     "comingSoon": "Coming soon",
+    "connecting": "Connecting...",
     "connectTitle": "Connect {{name}}",
-    "signOutTitle": "Sign out of {{name}}"
+    "signOutTitle": "Sign out of {{name}}",
+    "cancel": "Cancel",
+    "cancelTitle": "Cancel sign-in to {{name}}"
   },
   "row": {
     "connect": "Connect",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "cancel": "Cancel"
   },
   "setup": {
     "installHint": "Install the {{cli}} CLI on your machine. Houston will pick it up automatically.",
@@ -27,7 +31,8 @@
   "toast": {
     "signInFailed": "Couldn't open {{provider}} sign-in",
     "signOutFailed": "Couldn't sign out of {{provider}}",
-    "signInSucceeded": "Signed in to {{provider}}"
+    "signInSucceeded": "Signed in to {{provider}}",
+    "cancelFailed": "Couldn't cancel {{provider}} sign-in"
   },
   "providerLogin": {
     "title": "Finish signing in to {{name}}",

@@ -722,6 +722,17 @@ export const tauriProvider = {
       getEngine().submitProviderLoginCode(provider, code),
     ),
   /**
+   * Abort an in-flight sign-in the user gave up on (closed the OAuth
+   * tab, stuck spinner). Kills the CLI subprocess on the engine and
+   * frees the slot so the next `launchLogin` isn't rejected as
+   * "already pending" — the user can retry immediately instead of
+   * restarting Houston (#237). Idempotent and benign: the engine emits
+   * a `ProviderLoginComplete` with `success: false` and no `error`, so
+   * pending spinners clear without an error toast.
+   */
+  cancelLogin: (provider: string) =>
+    call<void>("cancel_provider_login", () => getEngine().cancelProviderLogin(provider)),
+  /**
    * Save a Gemini API key to `~/.gemini/.env` via the engine. Errors
    * surface through `call`'s standard rejection path; the caller is
    * expected to render them with `errorMessage(err)` + `addToast`.

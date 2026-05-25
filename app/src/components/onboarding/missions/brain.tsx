@@ -148,6 +148,22 @@ function ProviderCard({
     }
   };
 
+  // "Cancel and try again": tear down the engine-side login subprocess,
+  // THEN re-arm the local UI. Resetting `loginLaunched` alone (as this
+  // used to do) left the CLI running, so re-clicking Sign in was
+  // rejected as "already pending" and the user had to restart Houston
+  // (#237). cancelLogin frees the slot so the retry actually works.
+  const handleCancelWaiting = async () => {
+    setLoginError(null);
+    try {
+      await tauriProvider.cancelLogin(provider.id);
+    } catch (e) {
+      setLoginError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoginLaunched(false);
+    }
+  };
+
   return (
     <button
       type="button"
@@ -174,10 +190,7 @@ function ProviderCard({
           loginError={loginError}
           onSignIn={() => void handleSignIn()}
           onRefresh={() => void onRefresh()}
-          onCancelWaiting={() => {
-            setLoginLaunched(false);
-            setLoginError(null);
-          }}
+          onCancelWaiting={() => void handleCancelWaiting()}
         />
       )}
       {selected && connected && (

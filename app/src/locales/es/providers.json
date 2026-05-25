@@ -3,12 +3,16 @@
     "connected": "Conectado",
     "notConnected": "Sin conexión",
     "comingSoon": "Próximamente",
+    "connecting": "Conectando...",
     "connectTitle": "Conectar {{name}}",
-    "signOutTitle": "Cerrar sesión de {{name}}"
+    "signOutTitle": "Cerrar sesión de {{name}}",
+    "cancel": "Cancelar",
+    "cancelTitle": "Cancelar el inicio de sesión de {{name}}"
   },
   "row": {
     "connect": "Conectar",
-    "signOut": "Cerrar sesión"
+    "signOut": "Cerrar sesión",
+    "cancel": "Cancelar"
   },
   "setup": {
     "installHint": "Instala la CLI de {{cli}} en tu computador. Houston la detecta sola.",
@@ -27,7 +31,8 @@
   "toast": {
     "signInFailed": "No se pudo abrir el inicio de sesión de {{provider}}",
     "signOutFailed": "No se pudo cerrar sesión de {{provider}}",
-    "signInSucceeded": "Sesión iniciada en {{provider}}"
+    "signInSucceeded": "Sesión iniciada en {{provider}}",
+    "cancelFailed": "No se pudo cancelar el inicio de sesión de {{provider}}"
   },
   "providerLogin": {
     "title": "Termina de iniciar sesión en {{name}}",

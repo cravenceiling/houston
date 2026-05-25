@@ -160,6 +160,27 @@ export function ProviderSettings() {
     }
   };
 
+  const handleCancel = async (provider: ProviderInfo) => {
+    // Abort the engine-side login subprocess so the slot frees up and a
+    // retry isn't rejected as "already pending". Clear the spinner
+    // optimistically; the engine's benign ProviderLoginComplete (handled
+    // above) is the backstop.
+    try {
+      await tauriProvider.cancelLogin(provider.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[provider-settings] cancelLogin(${provider.id}) failed:`, msg);
+      addToast({
+        title: t("toast.cancelFailed", { provider: provider.name }),
+        description: msg,
+        variant: "error",
+      });
+    } finally {
+      setPendingId((current) => (current === provider.id ? null : current));
+      setLoginDialog((current) => (current?.provider.id === provider.id ? null : current));
+    }
+  };
+
   const handleSignOut = async (provider: ProviderInfo) => {
     setPendingId(provider.id);
     try {
@@ -216,6 +237,7 @@ export function ProviderSettings() {
               pending={pendingId === prov.id}
               onConnect={() => handleConnect(prov)}
               onSignOut={() => setConfirmSignOutFor(prov)}
+              onCancel={() => handleCancel(prov)}
             />
           );
         })}

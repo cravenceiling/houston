@@ -17,7 +17,7 @@ mod login_relay;
 
 pub use gemini_credentials::set_gemini_api_key;
 pub use gemini_disconnect::disconnect_gemini;
-pub use login_relay::submit_login_code;
+pub use login_relay::{cancel_login, submit_login_code};
 
 use crate::error::{CoreError, CoreResult};
 use houston_terminal_manager::provider_auth::ProviderAuthState;
@@ -241,7 +241,7 @@ pub async fn launch_login(provider: Provider, sink: DynEventSink) -> CoreResult<
             })?;
             let stderr = child.stderr.take();
 
-            login_relay::insert_session(&provider_id, cli_name, stdin).await?;
+            let registration = login_relay::insert_session(&provider_id, cli_name, stdin).await?;
             login_relay::spawn_relay(
                 provider_id,
                 cli_name_owned,
@@ -249,6 +249,7 @@ pub async fn launch_login(provider: Provider, sink: DynEventSink) -> CoreResult<
                 stdout,
                 stderr,
                 sink,
+                registration,
             );
             Ok(())
         }

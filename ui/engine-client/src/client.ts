@@ -468,6 +468,20 @@ export class HoustonClient {
     });
   }
   /**
+   * Abort an in-flight browser sign-in. The engine kills the provider
+   * CLI subprocess and frees the in-flight slot so a follow-up
+   * `providerLogin` isn't rejected as "already pending". Use this when
+   * the user gives up on the OAuth tab (closed the browser, stuck
+   * spinner): without it they'd be stuck until the 10-min relay
+   * timeout. Idempotent — cancelling with nothing pending is a no-op.
+   * The engine emits a benign `ProviderLoginComplete` (`success:
+   * false`, no `error`) so subscribers clear their pending state
+   * without showing an error toast.
+   */
+  cancelProviderLogin(name: string): Promise<void> {
+    return this.request("POST", `/providers/${this.seg(name)}/login/cancel`);
+  }
+  /**
    * Persist a Gemini API key to `~/.gemini/.env`. The engine validates
    * the key shape, writes atomically, and chmods 0600 on Unix. The
    * next `providerStatus("gemini")` poll will return `Authenticated`

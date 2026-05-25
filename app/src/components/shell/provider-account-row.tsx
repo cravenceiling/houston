@@ -26,12 +26,19 @@ export function ProviderAccountRow({
   pending,
   onConnect,
   onSignOut,
+  onCancel,
 }: {
   provider: ProviderInfo;
   connected: boolean;
   pending: boolean;
   onConnect: () => void;
   onSignOut: () => void;
+  /**
+   * Abort an in-flight sign-in. While `pending`, the action button
+   * turns into a Cancel control (spinner + visible label) so a user who
+   * abandoned the OAuth tab can retry without restarting Houston (#237).
+   */
+  onCancel: () => void;
 }) {
   const { t } = useTranslation("providers");
 
@@ -68,12 +75,15 @@ export function ProviderAccountRow({
       </div>
       <button
         type="button"
-        onClick={connected ? onSignOut : onConnect}
-        disabled={pending}
-        className="text-[12px] font-medium px-2.5 py-1 rounded-md border border-input bg-background hover:bg-black/[0.05] transition-colors disabled:opacity-60 disabled:cursor-wait focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 shrink-0"
+        onClick={pending ? onCancel : connected ? onSignOut : onConnect}
+        title={pending ? t("card.cancelTitle", { name: provider.name }) : undefined}
+        className="text-[12px] font-medium px-2.5 py-1 rounded-md border border-input bg-background hover:bg-black/[0.05] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 shrink-0"
       >
         {pending ? (
-          <Loader2 className="size-3.5 animate-spin" />
+          <span className="inline-flex items-center gap-1.5">
+            <Loader2 className="size-3.5 animate-spin" />
+            {t("row.cancel")}
+          </span>
         ) : connected ? (
           t("row.signOut")
         ) : (
