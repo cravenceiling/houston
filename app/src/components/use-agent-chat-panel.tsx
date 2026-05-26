@@ -66,6 +66,7 @@ import {
   isComposioSigninHref,
 } from "./composio-signin-card";
 import { ChatModelSelector } from "./chat-model-selector";
+import { ChatEffortSelector } from "./chat-effort-selector";
 import {
   getDefaultModel,
   validModelOrNull,
@@ -353,6 +354,7 @@ export function useAgentChatPanel({
           // producing the "dropdown says Gemini, response from Claude" bug.
           providerOverride: effectiveProvider,
           modelOverride: effectiveModel,
+          effortOverride: effectiveEffort,
         });
         pushFeedItem(path, sessionKey, {
           feed_type: "user_message",
@@ -398,6 +400,7 @@ export function useAgentChatPanel({
             // See note above re: effectiveProvider over chatProvider.
             providerOverride: effectiveProvider,
             modelOverride: effectiveModel,
+            effortOverride: effectiveEffort,
             buildPrompt: async (activityId) => {
               const paths = await tauriAttachments.save(`activity-${activityId}`, files);
               const prompt = withAttachmentPaths(claudePrompt, paths);
@@ -432,6 +435,7 @@ export function useAgentChatPanel({
       agentModes,
       effectiveProvider,
       effectiveModel,
+      effectiveEffort,
       pushFeedItem,
       queryClient,
       t,
@@ -484,6 +488,7 @@ export function useAgentChatPanel({
                 // the in-memory chatProvider — see send sites above.
                 providerOverride: effectiveProvider,
                 modelOverride: effectiveModel,
+                effortOverride: effectiveEffort,
               });
               pushFeedItem(path, selectedSessionKey, {
                 feed_type: "user_message",
@@ -501,7 +506,7 @@ export function useAgentChatPanel({
       if (isProviderAuthMessage(msg.content)) return null;
       return undefined;
     },
-    [effectiveModel, effectiveProvider, handleModelSelect, path, pushFeedItem, selectedSessionKey, t],
+    [effectiveModel, effectiveProvider, effectiveEffort, handleModelSelect, path, pushFeedItem, selectedSessionKey, t],
   );
   const mapFeedItems = useCallback(
     ({ items }: { sessionKey: string; items: FeedItem[] }) =>
@@ -589,8 +594,12 @@ export function useAgentChatPanel({
           model={effectiveModel}
           onSelect={handleModelSelect}
           lockedProvider={hasMessages ? effectiveProvider : null}
+        />
+        <ChatEffortSelector
+          provider={effectiveProvider}
+          model={effectiveModel}
           effort={effectiveEffort}
-          onEffortSelect={handleEffortSelect}
+          onSelect={handleEffortSelect}
         />
       </div>
     );
@@ -627,8 +636,14 @@ export function useAgentChatPanel({
             model={effectiveModel}
             onSelect={handleModelSelect}
             lockedProvider={hasMessages ? effectiveProvider : null}
+          />
+        </div>
+        <div className="px-2 py-1">
+          <ChatEffortSelector
+            provider={effectiveProvider}
+            model={effectiveModel}
             effort={effectiveEffort}
-            onEffortSelect={handleEffortSelect}
+            onSelect={handleEffortSelect}
           />
         </div>
       </div>

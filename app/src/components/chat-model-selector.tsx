@@ -7,16 +7,9 @@ import {
   DropdownMenuContent,
 } from "@houston-ai/core";
 import { tauriProvider, type ProviderStatus } from "../lib/tauri";
-import {
-  PROVIDERS,
-  getProvider,
-  getModel,
-  getEffortLevels,
-  type EffortLevel,
-} from "../lib/providers";
+import { PROVIDERS, getProvider, getModel } from "../lib/providers";
 import {
   ProviderModelGroup,
-  EffortGroup,
   ProviderIcon,
 } from "./chat-model-selector-parts";
 
@@ -33,14 +26,6 @@ interface ChatModelSelectorProps {
    * change to a different provider.
    */
   lockedProvider?: string | null;
-  /**
-   * Effective reasoning-effort for the active model. When `onEffortSelect`
-   * is provided and the active model supports effort, the dropdown shows an
-   * effort row with this value marked active.
-   */
-  effort?: string;
-  /** Called when the user picks an effort level. Omit to hide the effort row. */
-  onEffortSelect?: (effort: EffortLevel) => void;
 }
 
 export function ChatModelSelector({
@@ -48,8 +33,6 @@ export function ChatModelSelector({
   model,
   onSelect,
   lockedProvider,
-  effort,
-  onEffortSelect,
 }: ChatModelSelectorProps) {
   const { t } = useTranslation("chat");
   const [statuses, setStatuses] = useState<Record<string, ProviderStatus>>({});
@@ -68,8 +51,6 @@ export function ChatModelSelector({
   const currentProvider = getProvider(provider);
   const currentModel = getModel(provider, model);
   const displayLabel = currentModel?.label ?? currentProvider?.subtitle ?? t("modelSelector.selectModel");
-  // Effort levels are per-model (e.g. Sonnet has `max` but not `xhigh`).
-  const effortLevels = getEffortLevels(provider, model);
 
   // Honour `lockedProvider` only when it points at a currently-active
   // provider that the engine reports as installed. Two cases drop the
@@ -135,13 +116,6 @@ export function ChatModelSelector({
               />
             );
           })}
-          {onEffortSelect && effortLevels.length > 0 && (
-            <EffortGroup
-              levels={effortLevels}
-              active={effort}
-              onSelect={onEffortSelect}
-            />
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

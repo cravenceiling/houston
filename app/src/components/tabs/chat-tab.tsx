@@ -30,6 +30,7 @@ import { analytics } from "../../lib/analytics";
 import type { TabProps } from "../../lib/types";
 import { HoustonThinkingIndicator } from "../shell/experience-card";
 import { ChatModelSelector } from "../chat-model-selector";
+import { ChatEffortSelector } from "../chat-effort-selector";
 import { Paperclip } from "lucide-react";
 import { useChatDisplayLabels } from "../use-chat-display-labels";
 import { getDefaultModel, PROVIDERS, validEffortOrDefault, type EffortLevel } from "../../lib/providers";
@@ -272,6 +273,7 @@ export default function ChatTab({ agent }: TabProps) {
           // to Anthropic.
           providerOverride: effectiveProvider,
           modelOverride: effectiveModel,
+          effortOverride: effectiveEffort,
         });
         started = true;
         pushFeedItem(agentPath, sessionKey, { feed_type: "user_message", data: prompt });
@@ -290,7 +292,7 @@ export default function ChatTab({ agent }: TabProps) {
         sendingRef.current = false;
       }
     },
-    [agentPath, sessionKey, attachmentScope, pushFeedItem, setComposerText, setComposerFiles, effectiveProvider, effectiveModel, t],
+    [agentPath, sessionKey, attachmentScope, pushFeedItem, setComposerText, setComposerFiles, effectiveProvider, effectiveModel, effectiveEffort, t],
   );
   const handleQueued = useCallback(() => {
     setComposerText("");
@@ -389,14 +391,20 @@ export default function ChatTab({ agent }: TabProps) {
         onRemoveQueuedMessage={messageQueue.removeQueuedMessage}
         queuedLabels={queuedLabels}
         footer={
-          <ChatModelSelector
-            provider={effectiveProvider}
-            model={effectiveModel}
-            onSelect={handleModelSelect}
-            lockedProvider={visibleFeedItems.length > 0 ? effectiveProvider : null}
-            effort={effectiveEffort}
-            onEffortSelect={handleEffortSelect}
-          />
+          <div className="flex items-center gap-1">
+            <ChatModelSelector
+              provider={effectiveProvider}
+              model={effectiveModel}
+              onSelect={handleModelSelect}
+              lockedProvider={visibleFeedItems.length > 0 ? effectiveProvider : null}
+            />
+            <ChatEffortSelector
+              provider={effectiveProvider}
+              model={effectiveModel}
+              effort={effectiveEffort}
+              onSelect={handleEffortSelect}
+            />
+          </div>
         }
         attachMenu={({ openFilePicker }) => (
           <div className="flex flex-col gap-0.5">
@@ -416,8 +424,14 @@ export default function ChatTab({ agent }: TabProps) {
                 model={effectiveModel}
                 onSelect={handleModelSelect}
                 lockedProvider={visibleFeedItems.length > 0 ? effectiveProvider : null}
+              />
+            </div>
+            <div className="px-2 py-1">
+              <ChatEffortSelector
+                provider={effectiveProvider}
+                model={effectiveModel}
                 effort={effectiveEffort}
-                onEffortSelect={handleEffortSelect}
+                onSelect={handleEffortSelect}
               />
             </div>
           </div>

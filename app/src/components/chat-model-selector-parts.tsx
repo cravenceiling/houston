@@ -5,7 +5,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@houston-ai/core";
-import { type ProviderInfo, type EffortLevel } from "../lib/providers";
+import { type ProviderInfo } from "../lib/providers";
 import { ClaudeLogo, OpenAILogo } from "./shell/provider-logos";
 
 /**
@@ -59,77 +59,6 @@ export function ProviderModelGroup({
             <div className="min-w-0 flex-1">
               <div className="text-sm">{m.label}</div>
               <div className="text-xs text-muted-foreground leading-snug">{m.description}</div>
-            </div>
-          </DropdownMenuItem>
-        );
-      })}
-    </>
-  );
-}
-
-/**
- * Reasoning-effort picker rendered below the model groups. Shows only the
- * levels the active model accepts (passed in by the parent), so Sonnet never
- * offers `xhigh` and Codex never offers `max`.
- */
-export function EffortGroup({
-  levels,
-  active,
-  onSelect,
-}: {
-  levels: readonly EffortLevel[];
-  active?: string;
-  onSelect: (effort: EffortLevel) => void;
-}) {
-  const { t } = useTranslation("chat");
-  const labels: Record<EffortLevel, { label: string; description: string }> = {
-    low: {
-      label: t("modelSelector.effortLevels.low"),
-      description: t("modelSelector.effortDescriptions.low"),
-    },
-    medium: {
-      label: t("modelSelector.effortLevels.medium"),
-      description: t("modelSelector.effortDescriptions.medium"),
-    },
-    high: {
-      label: t("modelSelector.effortLevels.high"),
-      description: t("modelSelector.effortDescriptions.high"),
-    },
-    xhigh: {
-      label: t("modelSelector.effortLevels.xhigh"),
-      description: t("modelSelector.effortDescriptions.xhigh"),
-    },
-    max: {
-      label: t("modelSelector.effortLevels.max"),
-      description: t("modelSelector.effortDescriptions.max"),
-    },
-  };
-  return (
-    <>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel className="flex items-center gap-1.5 text-xs text-muted-foreground font-normal">
-        {t("modelSelector.effort")}
-      </DropdownMenuLabel>
-      {levels.map((level) => {
-        const isActive = level === active;
-        return (
-          <DropdownMenuItem
-            key={level}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(level);
-            }}
-            className="flex items-start gap-2.5 py-1.5"
-          >
-            <div className="w-4 shrink-0 mt-0.5 flex justify-center">
-              {isActive && <Check className="h-3.5 w-3.5 text-foreground" />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm">{labels[level].label}</div>
-              <div className="text-xs text-muted-foreground leading-snug">
-                {labels[level].description}
-              </div>
             </div>
           </DropdownMenuItem>
         );
