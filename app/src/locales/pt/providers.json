@@ -3,12 +3,16 @@
     "connected": "Conectado",
     "notConnected": "Sem conexão",
     "comingSoon": "Em breve",
+    "connecting": "Conectando...",
     "connectTitle": "Conectar {{name}}",
-    "signOutTitle": "Sair de {{name}}"
+    "signOutTitle": "Sair de {{name}}",
+    "cancel": "Cancelar",
+    "cancelTitle": "Cancelar o login de {{name}}"
   },
   "row": {
     "connect": "Conectar",
-    "signOut": "Sair"
+    "signOut": "Sair",
+    "cancel": "Cancelar"
   },
   "setup": {
     "installHint": "Instale a CLI {{cli}} no seu computador. Houston detecta sozinho.",
@@ -17,6 +21,13 @@
     "waiting": "Esperando você terminar o login no navegador...",
     "cancelWaiting": "Cancelar e tentar de novo",
     "installedCheckAgain": "Já está instalado? Verificar de novo"
+  },
+  "claudeInstall": {
+    "installing": "Baixando Claude Code...",
+    "installingWithProgress": "Baixando Claude Code... {{progress}}%",
+    "failedTitle": "Houston não conseguiu baixar Claude Code",
+    "preparing": "Houston está baixando Claude Code em segundo plano. Se não começar, tente novamente abaixo.",
+    "retry": "Tentar baixar de novo"
   },
   "signOutConfirm": {
     "title": "Sair de {{provider}}?",
@@ -27,7 +38,8 @@
   "toast": {
     "signInFailed": "Não foi possível abrir o login de {{provider}}",
     "signOutFailed": "Não foi possível sair de {{provider}}",
-    "signInSucceeded": "Conectado a {{provider}}"
+    "signInSucceeded": "Conectado a {{provider}}",
+    "cancelFailed": "Não foi possível cancelar o login de {{provider}}"
   },
   "providerLogin": {
     "title": "Termine de entrar em {{name}}",

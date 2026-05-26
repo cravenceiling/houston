@@ -722,6 +722,17 @@ export const tauriProvider = {
       getEngine().submitProviderLoginCode(provider, code),
     ),
   /**
+   * Abort an in-flight sign-in the user gave up on (closed the OAuth
+   * tab, stuck spinner). Kills the CLI subprocess on the engine and
+   * frees the slot so the next `launchLogin` isn't rejected as
+   * "already pending" — the user can retry immediately instead of
+   * restarting Houston (#237). Idempotent and benign: the engine emits
+   * a `ProviderLoginComplete` with `success: false` and no `error`, so
+   * pending spinners clear without an error toast.
+   */
+  cancelLogin: (provider: string) =>
+    call<void>("cancel_provider_login", () => getEngine().cancelProviderLogin(provider)),
+  /**
    * Save a Gemini API key to `~/.gemini/.env` via the engine. Errors
    * surface through `call`'s standard rejection path; the caller is
    * expected to render them with `errorMessage(err)` + `addToast`.
@@ -739,6 +750,40 @@ import { osCheckClaudeCli, osOpenUrl } from "./os-bridge";
 export const tauriSystem = {
   checkClaudeCli: () => osCheckClaudeCli(),
   openUrl: (url: string) => osOpenUrl(url),
+};
+
+// ─── Claude Code runtime installer ────────────────────────────────────
+
+import type { ClaudeStatus as EngineClaudeStatus } from "@houston-ai/engine-client";
+
+/** Mirror of the engine `ClaudeStatus` — re-exported so callers can
+ *  import from `lib/tauri.ts` like the other engine DTOs. */
+export type ClaudeStatus = EngineClaudeStatus;
+
+/** Runtime install bridge for the proprietary Claude Code CLI.
+ *
+ *  Distinct from `tauriProvider`: provider-level concerns (auth, CLI
+ *  spawn) sit on `tauriProvider`; the *install* of Anthropic's CLI is
+ *  Houston-managed (we download it because the license forbids
+ *  bundling) and exposed here so the onboarding card can show a
+ *  specific "couldn't reach Anthropic — Retry" affordance — issue #231.
+ */
+export const tauriClaude = {
+  status: () =>
+    call<ClaudeStatus>("claude_status", () => getEngine().claudeStatus()),
+  /**
+   * Triggers the background install. Errors are deliberately not
+   * auto-toasted by `call` — both callers (the onboarding card hook and
+   * the `ClaudeCliFailed` toast retry action) surface failures
+   * themselves, and double-toasting on a retry click is noisy.
+   */
+  install: () =>
+    call<void>(
+      "claude_install",
+      () => getEngine().claudeInstall(),
+      undefined,
+      { toast: false },
+    ),
 };
 
 // ─── Agent file watcher ───────────────────────────────────────────────
