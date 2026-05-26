@@ -12,6 +12,7 @@ import { logger } from "../lib/logger";
 import { isMac } from "../lib/platform";
 import { resolveNotificationTarget, shouldNavigateOnAppActivation } from "../lib/notification-nav";
 import { tauriClaude } from "../lib/tauri";
+import { useClaudeInstallErrorText } from "./use-claude-install";
 import { hasToolRuntimeError } from "../components/tool-runtime-feed";
 import {
   consumePendingNav,
@@ -32,6 +33,7 @@ export function useSessionEvents() {
   const addToast = useUIStore((s) => s.addToast);
   const setAuthRequired = useUIStore((s) => s.setAuthRequired);
   const { t } = useTranslation(["providers", "common"]);
+  const claudeErrorText = useClaudeInstallErrorText();
 
   const handlersRef = useRef({
     pushFeedItem,
@@ -41,6 +43,7 @@ export function useSessionEvents() {
     getWorkspace: () => useWorkspaceStore.getState().current,
     getAgent: () => useAgentStore.getState().current,
     t,
+    claudeErrorText,
   });
   handlersRef.current = {
     pushFeedItem,
@@ -50,6 +53,7 @@ export function useSessionEvents() {
     getWorkspace: () => useWorkspaceStore.getState().current,
     getAgent: () => useAgentStore.getState().current,
     t,
+    claudeErrorText,
   };
 
   useEffect(() => {
@@ -137,19 +141,23 @@ export function useSessionEvents() {
           logger.info(`[auth] AuthRequired received: provider=${payload.data.provider}`);
           h.setAuthRequired(payload.data.provider);
           break;
-        case "ClaudeCliFailed":
+        case "ClaudeCliFailed": {
           // Per the beta-stage "no silent failures" rule, every install
           // failure must reach the user somewhere — the onboarding card
           // shows it inline but a user already past onboarding (e.g. on
           // a Houston upgrade that re-downloads claude-code) would
-          // otherwise never know. Toast carries the engine's classified
-          // message verbatim because it's already user-readable (see
-          // `houston_claude_installer::classify_reqwest_error`).
-          logger.warn(`[claude-install] ClaudeCliFailed: ${payload.data.message}`);
+          // otherwise never know. The engine emits a typed `kind`; we
+          // localize it here and keep `detail` in the log for the bug
+          // report.
+          const installError = payload.data.error;
+          logger.warn(
+            `[claude-install] ClaudeCliFailed: kind=${installError.kind}` +
+              (installError.detail ? ` detail=${installError.detail}` : ""),
+          );
           h.addToast({
             variant: "error",
             title: h.t("providers:claudeInstall.failedTitle"),
-            description: payload.data.message,
+            description: h.claudeErrorText(installError),
             action: {
               label: h.t("providers:claudeInstall.retry"),
               onClick: () => {
@@ -160,6 +168,7 @@ export function useSessionEvents() {
             },
           });
           break;
+        }
       }
     });
 
