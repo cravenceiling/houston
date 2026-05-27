@@ -32,6 +32,12 @@ sentry = "0.42"
 # unconditionally in logging.rs even when SENTRY_DSN is empty.
 sentry-tracing = "0.42"
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
+houston-ui-events = { path = "../../engine/houston-ui-events" }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking"], default-features = false }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+
 # macOS-only: native blocking dialog used by the first-launch DMG guard
 # (`dmg_guard.rs`). Must fire BEFORE the Tauri builder runs because once
 # the webview boots we've already committed to launching from the DMG.
@@ -39,11 +45,6 @@ keyring = { version = "3", features = ["apple-native", "windows-native"] }
 # can pop a dialog at the very top of `run()`.
 [target."cfg(target_os = \"macos\")".dependencies]
 rfd = "0.15"
-houston-ui-events = { path = "../../engine/houston-ui-events" }
-reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking"], default-features = false }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-tracing-appender = { workspace = true }
 
 # Windows + Linux only: the OS protocol handler launches a fresh
 # `houston-app.exe` for every `houston://` URL it receives (Start-menu
