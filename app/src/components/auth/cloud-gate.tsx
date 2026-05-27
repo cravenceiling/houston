@@ -148,14 +148,25 @@ export function CloudGate({ children }: { children: ReactNode }) {
     // up until the engine singleton points at THIS user's tenant. Without
     // the await, children would mount with the new session but the old
     // engine token, and the first request would land 401 (which is what
-    // ate the language-picker PUT).
+    // ate the language-picker PUT). Every failure path surfaces — leaving
+    // the user stuck on the spinner with no toast was the previous bug.
     const handleSignedIn = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-      await ensureProvisioned(session.user.id);
-      setPhase({ kind: "ready" });
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!session) {
+          throw new Error("signed in but no session — please try again");
+        }
+        await ensureProvisioned(session.user.id);
+        setPhase({ kind: "ready" });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`[cloud-gate] post-signin handshake failed: ${msg}`);
+        setPhase({ kind: "error", message: msg });
+      }
     };
     return <CloudLoginScreen onSignedIn={handleSignedIn} />;
   }

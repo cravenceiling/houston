@@ -117,19 +117,31 @@ export async function waitForEngineHealthy(
 ): Promise<void> {
   const deadline = Date.now() + deadlineMs;
   let delay = 500;
+  // Track the last non-success outcome so the timeout message points at
+  // the actual reason (401 → wrong tenant; connect refused → PF watcher
+  // is down; CORS → server misconfig). Without these, every failure
+  // mode collapsed to the same generic "never returned 200" string.
+  let lastStatus: number | null = null;
+  let lastError: unknown = null;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(`${config.baseUrl}/v1/health`, {
         headers: { Authorization: `Bearer ${config.token}` },
       });
       if (res.ok) return;
-    } catch {
-      /* connect refused while port-forward catches up — retry */
+      lastStatus = res.status;
+    } catch (err) {
+      lastError = err;
     }
     await new Promise((r) => setTimeout(r, delay));
     delay = Math.min(delay * 1.5, 2000);
   }
+  const detail = lastStatus !== null
+    ? `last status ${lastStatus}`
+    : lastError instanceof Error
+      ? `last error: ${lastError.message}`
+      : "no responses received";
   throw new Error(
-    "engine /v1/health never returned 200 — is the port-forward watcher running?",
+    `engine /v1/health never returned 200 (${detail}) — is the port-forward watcher running?`,
   );
 }
