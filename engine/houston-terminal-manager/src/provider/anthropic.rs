@@ -36,7 +36,12 @@ impl ProviderAdapter for AnthropicAdapter {
     }
 
     fn probe_auth<'a>(&'a self, cli_path: &'a Path) -> ProbeFuture<'a> {
-        Box::pin(probe_claude_auth_status(cli_path))
+        Box::pin(async move {
+            let home = dirs::home_dir()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            probe_claude_auth_status(cli_path, &home).await
+        })
     }
 
     fn login_args(&self) -> Option<&'static [&'static str]> {
