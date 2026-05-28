@@ -169,6 +169,13 @@ pub fn migrate_agent_data(agent_root: &Path) -> Result<()> {
         }
     }
 
+    // Rewrite legacy Claude model aliases (`opus`/`sonnet`) stored in the
+    // per-agent config to explicit version IDs, now that the model catalog
+    // pins versions (see `app/src/lib/providers.ts`). Runs after the layout
+    // migration above so the config has reached its
+    // `.houston/config/config.json` home.
+    migrate_config_model_aliases(agent_root)?;
+
     // learnings.md → learnings.json (parse markdown bullet list into JSON objects).
     let learnings_md = agent_root.join(".houston/memory/learnings.md");
     let learnings_new = agent_root.join(".houston/learnings/learnings.json");
@@ -267,6 +274,69 @@ pub fn migrate_agent_data(agent_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Legacy Claude model aliases → explicit version IDs.
+///
+/// Houston used to store the Claude CLI shorthand (`"opus"`, `"sonnet"`) as an
+/// agent's model. The shorthand resolves to *whatever the CLI calls latest*, so
+/// it can't distinguish Opus 4.7 from 4.8 once both ship. The model catalog
+/// (`app/src/lib/providers.ts`) now pins explicit version IDs, so each alias is
+/// rewritten to the version it denoted at the time of the switch. Mapping
+/// `"opus"` → 4.7 is deliberate: it preserves the exact model existing users
+/// were implicitly running rather than silently bumping them to the new
+/// flagship (they can opt into 4.8 from the picker).
+const LEGACY_MODEL_ALIASES: &[(&str, &str)] = &[
+    ("opus", "claude-opus-4-7"),
+    ("sonnet", "claude-sonnet-4-6"),
+];
+
+/// Rewrite a legacy Claude model alias in `.houston/config/config.json` to its
+/// explicit version ID. Idempotent: explicit IDs and unknown values pass
+/// through untouched, and a missing / empty / non-object config is a no-op so
+/// hand-edited or foreign-format files are never clobbered.
+///
+/// The model has historically lived under `"model"` (current) or
+/// `"claude_model"` (pre-multi-provider, still read via a serde alias), so both
+/// keys are normalized in place.
+fn migrate_config_model_aliases(agent_root: &Path) -> Result<()> {
+    let rel = ".houston/config/config.json";
+    let path = agent_root.join(rel);
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return Ok(()); // no per-agent config — nothing to rewrite
+    };
+    if raw.trim().is_empty() {
+        return Ok(());
+    }
+    let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str::<serde_json::Value>(&raw)
+    else {
+        return Ok(()); // not a JSON object — leave it untouched
+    };
+
+    let mut changed = false;
+    for key in ["model", "claude_model"] {
+        let replacement = match obj.get(key) {
+            Some(serde_json::Value::String(current)) => LEGACY_MODEL_ALIASES
+                .iter()
+                .find(|(alias, _)| *alias == current.as_str())
+                .map(|(_, repl)| (*repl).to_string()),
+            _ => None,
+        };
+        if let Some(repl) = replacement {
+            obj.insert(key.to_string(), serde_json::Value::String(repl));
+            changed = true;
+        }
+    }
+
+    if changed {
+        let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))?;
+        write_file_atomic(agent_root, rel, &body)?;
+        tracing::info!(
+            agent_root = %agent_root.display(),
+            "migrated legacy Claude model alias → explicit version id"
+        );
+    }
+    Ok(())
+}
+
 /// Outcome of [`link_or_copy_role_file`]: which path the OS accepted.
 /// Reported back to the caller so it can log the right line — copies
 /// drift if `CLAUDE.md` is edited later, symlinks don't.
@@ -303,6 +373,85 @@ fn link_or_copy_role_file(target_path: &Path, link_path: &Path) -> std::io::Resu
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    fn write_config(agent_root: &Path, body: &str) {
+        let dir = agent_root.join(".houston/config");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("config.json"), body).unwrap();
+    }
+
+    fn read_config(agent_root: &Path) -> serde_json::Value {
+        let raw = fs::read_to_string(agent_root.join(".houston/config/config.json")).unwrap();
+        serde_json::from_str(&raw).unwrap()
+    }
+
+    #[test]
+    fn migrates_opus_alias_to_4_7_and_preserves_siblings() {
+        let dir = TempDir::new().unwrap();
+        write_config(
+            dir.path(),
+            r#"{"provider":"anthropic","model":"opus","effort":"high"}"#,
+        );
+        migrate_config_model_aliases(dir.path()).unwrap();
+        let cfg = read_config(dir.path());
+        assert_eq!(cfg["model"], "claude-opus-4-7");
+        assert_eq!(cfg["provider"], "anthropic");
+        assert_eq!(cfg["effort"], "high");
+    }
+
+    #[test]
+    fn migrates_sonnet_alias_to_4_6() {
+        let dir = TempDir::new().unwrap();
+        write_config(dir.path(), r#"{"model":"sonnet"}"#);
+        migrate_config_model_aliases(dir.path()).unwrap();
+        assert_eq!(read_config(dir.path())["model"], "claude-sonnet-4-6");
+    }
+
+    #[test]
+    fn migrates_legacy_claude_model_key() {
+        let dir = TempDir::new().unwrap();
+        write_config(dir.path(), r#"{"claude_model":"opus"}"#);
+        migrate_config_model_aliases(dir.path()).unwrap();
+        assert_eq!(read_config(dir.path())["claude_model"], "claude-opus-4-7");
+    }
+
+    #[test]
+    fn leaves_explicit_ids_and_unknown_values_untouched() {
+        let dir = TempDir::new().unwrap();
+        write_config(dir.path(), r#"{"model":"claude-opus-4-8"}"#);
+        migrate_config_model_aliases(dir.path()).unwrap();
+        assert_eq!(read_config(dir.path())["model"], "claude-opus-4-8");
+
+        let dir2 = TempDir::new().unwrap();
+        write_config(dir2.path(), r#"{"provider":"openai","model":"gpt-5.5"}"#);
+        migrate_config_model_aliases(dir2.path()).unwrap();
+        assert_eq!(read_config(dir2.path())["model"], "gpt-5.5");
+    }
+
+    #[test]
+    fn migration_is_idempotent_and_noop_without_config() {
+        // No config file at all — must not error or create one.
+        let dir = TempDir::new().unwrap();
+        migrate_config_model_aliases(dir.path()).unwrap();
+        assert!(!dir.path().join(".houston/config/config.json").exists());
+
+        // Running twice over an alias config is stable.
+        let dir2 = TempDir::new().unwrap();
+        write_config(dir2.path(), r#"{"model":"opus"}"#);
+        migrate_config_model_aliases(dir2.path()).unwrap();
+        migrate_config_model_aliases(dir2.path()).unwrap();
+        assert_eq!(read_config(dir2.path())["model"], "claude-opus-4-7");
+    }
+
+    #[test]
+    fn migration_does_not_clobber_non_object_config() {
+        let dir = TempDir::new().unwrap();
+        write_config(dir.path(), "not json at all");
+        migrate_config_model_aliases(dir.path()).unwrap();
+        let raw =
+            fs::read_to_string(dir.path().join(".houston/config/config.json")).unwrap();
+        assert_eq!(raw, "not json at all");
+    }
 
     #[test]
     fn rejects_parent_dir() {
