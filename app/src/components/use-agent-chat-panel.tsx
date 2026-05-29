@@ -68,12 +68,16 @@ import {
 import { ChatModelSelector } from "./chat-model-selector";
 import { ChatEffortSelector } from "./chat-effort-selector";
 import {
+  getContextWindow,
   getDefaultModel,
+  getModel,
   validModelOrNull,
   validEffortOrDefault,
   normalizeLegacyModel,
   type EffortLevel,
 } from "../lib/providers";
+import { latestContextUsage } from "../lib/context-usage";
+import { ContextIndicator } from "./context-indicator";
 import { analytics } from "../lib/analytics";
 import {
   buildSkillClaudePrompt,
@@ -209,6 +213,22 @@ export function useAgentChatPanel({
     effectiveModel,
     agentEffort,
   );
+
+  // ── Context-usage indicator ───────────────────────────────────────────
+  // Latest turn's normalized usage from this session's feed, plus the active
+  // model's context-window size. Drive the composer footer pill + dialog.
+  const sessionFeedItems = useFeedStore((s) =>
+    path && selectedSessionKey
+      ? s.items[path]?.[selectedSessionKey]
+      : undefined,
+  );
+  const contextUsage = useMemo(
+    () => latestContextUsage(sessionFeedItems),
+    [sessionFeedItems],
+  );
+  const contextWindow = getContextWindow(effectiveProvider, effectiveModel);
+  const modelLabel = getModel(effectiveProvider, effectiveModel)?.label;
+
   const handleModelSelect = useCallback(
     async (prov: string, mod: string) => {
       // Optimistic UI: the picker flips instantly while the writes fan out.
@@ -607,9 +627,16 @@ export function useAgentChatPanel({
           effort={effectiveEffort}
           onSelect={handleEffortSelect}
         />
+        <div className="ml-auto">
+          <ContextIndicator
+            usage={contextUsage}
+            contextWindow={contextWindow}
+            modelLabel={modelLabel}
+          />
+        </div>
       </div>
     );
-  }, [agent, t, effectiveProvider, effectiveModel, effectiveEffort, handleModelSelect, handleEffortSelect]);
+  }, [agent, t, effectiveProvider, effectiveModel, effectiveEffort, handleModelSelect, handleEffortSelect, contextUsage, contextWindow, modelLabel]);
 
   const attachMenu = useMemo<AIBoardProps["attachMenu"]>(() => {
     if (!agent) return undefined;

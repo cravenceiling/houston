@@ -372,6 +372,27 @@ Don't append every streaming delta as a new message row. Same
 pattern for `thinking_streaming` / `thinking`. See
 `examples/smartbooks/src/lib/feed.ts::appendFeedItem`.
 
+### Context-usage lives on `final_result`
+
+The terminal `feed_type: "final_result"` item carries `data: { result,
+cost_usd, duration_ms, usage }`. `usage` is the normalized `TokenUsage`
+`{ context_tokens, output_tokens, cached_tokens }` (Rust
+`houston-terminal-manager::TokenUsage`, TS `@houston-ai/chat` `TokenUsage`)
+or `null` for providers that don't report it (Anthropic + Codex do; Gemini
+doesn't yet). `context_tokens` is the prompt size of the most recent model
+request, i.e. how much of the context window is in use — Anthropic's parser
+sums its three-way split (`input + cache_creation + cache_read`), Codex's
+`input_tokens` is already cache-inclusive so it maps straight through. The
+desktop composer's context-usage indicator (`app/src/components/context-
+indicator.tsx`) divides `context_tokens` by the model's `contextWindow`
+(`app/src/lib/providers.ts`, Claude 200k / gpt-5.5 400k) for a "% full"
+gauge; it reads the latest such item via `latestContextUsage` so it works
+both live and after a history reload (the field is persisted in
+`chat_feed.data_json`). `/context` (the interactive Claude Code slash
+command) is unavailable here because the engine drives `claude -p` in
+non-interactive print mode — the data comes from the stream's `usage`
+blocks, not a REPL command.
+
 ### Binary file downloads
 
 The `read-project` route returns text only. For xlsx, pdf, images,

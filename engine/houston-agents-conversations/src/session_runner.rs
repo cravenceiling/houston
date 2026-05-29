@@ -421,9 +421,13 @@ fn serialize_for_persist(item: &FeedItem) -> Option<(String, String)> {
             result,
             cost_usd,
             duration_ms,
+            usage,
         } => {
+            // `usage` serializes to its TokenUsage object (or null) so the
+            // context-usage indicator survives a history reload, same as the
+            // live FeedItem event.
             let data = serde_json::json!({
-                "result": result, "cost_usd": cost_usd, "duration_ms": duration_ms
+                "result": result, "cost_usd": cost_usd, "duration_ms": duration_ms, "usage": usage
             });
             Some(("final_result".into(), data.to_string()))
         }
@@ -668,5 +672,43 @@ mod tests {
 
         assert_eq!(feed_type, "tool_runtime_error");
         assert_eq!(data, r#"{"details":"exec failed","kind":"local_tool"}"#);
+    }
+
+    #[test]
+    fn final_result_persists_token_usage_for_history() {
+        // The context-usage indicator reads usage back from history on reload,
+        // so the persisted JSON must carry the TokenUsage object.
+        let item = FeedItem::FinalResult {
+            result: "Done".to_string(),
+            cost_usd: Some(0.01),
+            duration_ms: Some(1200),
+            usage: Some(houston_terminal_manager::TokenUsage {
+                context_tokens: 151_500,
+                output_tokens: 420,
+                cached_tokens: 150_000,
+            }),
+        };
+
+        let (feed_type, data) = serialize_for_persist(&item).expect("serializes");
+
+        assert_eq!(feed_type, "final_result");
+        let parsed: serde_json::Value = serde_json::from_str(&data).unwrap();
+        assert_eq!(parsed["usage"]["context_tokens"], 151_500);
+        assert_eq!(parsed["usage"]["cached_tokens"], 150_000);
+        assert_eq!(parsed["usage"]["output_tokens"], 420);
+    }
+
+    #[test]
+    fn final_result_without_usage_persists_null() {
+        let item = FeedItem::FinalResult {
+            result: "Done".to_string(),
+            cost_usd: None,
+            duration_ms: None,
+            usage: None,
+        };
+
+        let (_, data) = serialize_for_persist(&item).expect("serializes");
+        let parsed: serde_json::Value = serde_json::from_str(&data).unwrap();
+        assert!(parsed["usage"].is_null());
     }
 }

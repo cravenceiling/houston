@@ -21,6 +21,16 @@ export interface ModelOption {
    * effort row (e.g. Gemini, Haiku).
    */
   effortLevels?: readonly EffortLevel[];
+  /**
+   * Maximum context-window size in tokens, as it behaves inside the model's
+   * CLI. Drives the composer context-usage indicator (used tokens ÷ window).
+   * Omit when the window isn't known for a model so the indicator degrades to
+   * a raw token count instead of showing a misleading percentage.
+   *
+   * Houston runs Claude at the standard 200k window (not the 1M beta). Codex
+   * caps gpt-5.5 at 400k even though the raw API offers 1M.
+   */
+  contextWindow?: number;
 }
 
 /**
@@ -74,6 +84,9 @@ export const PROVIDERS: readonly ProviderInfo[] = [
         label: "GPT-5.5",
         description: "OpenAI's frontier model.",
         effortLevels: ["low", "medium", "high", "xhigh"],
+        // Codex caps gpt-5.5 at 400k total context (272k input + 128k
+        // reserved output) even though the raw API exposes 1M.
+        contextWindow: 400_000,
       },
     ],
     defaultModel: "gpt-5.5",
@@ -93,6 +106,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
         description: "Best balance of speed and quality.",
         // Sonnet 4.6: has `max`, no `xhigh`.
         effortLevels: ["low", "medium", "high", "max"],
+        contextWindow: 200_000,
       },
       {
         id: "claude-opus-4-8",
@@ -101,6 +115,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
         // Opus 4.8: full range (same as 4.7). NOTE: `ultracode` is a Claude
         // Code harness mode, NOT an effort level — never add it here.
         effortLevels: ["low", "medium", "high", "xhigh", "max"],
+        contextWindow: 200_000,
       },
       {
         id: "claude-opus-4-7",
@@ -108,6 +123,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
         description: "Previous flagship. Very capable, slower.",
         // Opus 4.7: full range.
         effortLevels: ["low", "medium", "high", "xhigh", "max"],
+        contextWindow: 200_000,
       },
     ],
     defaultModel: "claude-sonnet-4-6",
@@ -127,6 +143,20 @@ export function getModel(providerId: string, modelId: string): ModelOption | und
 /** Get the default provider + model for a provider id. */
 export function getDefaultModel(providerId: string): string {
   return getProvider(providerId)?.defaultModel ?? "claude-sonnet-4-6";
+}
+
+/**
+ * Max context-window size (tokens) for a provider+model, or `undefined` when
+ * the model is unknown or its window isn't catalogued. Drives the composer
+ * context-usage indicator: the caller shows a percentage when a window is
+ * known and falls back to a raw token count otherwise.
+ */
+export function getContextWindow(
+  providerId: string | null | undefined,
+  modelId: string | null | undefined,
+): number | undefined {
+  if (!providerId || !modelId) return undefined;
+  return getModel(providerId, modelId)?.contextWindow;
 }
 
 /**

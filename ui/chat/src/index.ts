@@ -1,6 +1,7 @@
 // === Types ===
 export type {
   FeedItem,
+  TokenUsage,
   RunStatus,
   ToolRuntimeErrorEntry,
   ProviderError,

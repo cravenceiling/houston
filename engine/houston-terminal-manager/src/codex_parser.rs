@@ -6,7 +6,7 @@
 use super::auth_error::{is_auth_retry_noise, AUTH_RETRY_MARKER};
 use super::provider::Provider;
 use super::provider_error_kind::ProviderError;
-use super::types::FeedItem;
+use super::types::{FeedItem, TokenUsage};
 use serde::Deserialize;
 use std::str::FromStr;
 
@@ -75,6 +75,21 @@ pub struct CodexUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub cached_input_tokens: Option<u64>,
+}
+
+impl CodexUsage {
+    /// Normalize into the shared [`TokenUsage`]. Codex (like the OpenAI API)
+    /// reports `input_tokens` as the cache-INCLUSIVE prompt total, with
+    /// `cached_input_tokens` the cached subset — so the context-window size
+    /// is just `input_tokens`. (Contrast Anthropic, which splits the prompt
+    /// across three fields that must be summed.)
+    fn normalize(&self) -> TokenUsage {
+        TokenUsage {
+            context_tokens: self.input_tokens.unwrap_or(0),
+            output_tokens: self.output_tokens.unwrap_or(0),
+            cached_tokens: self.cached_input_tokens.unwrap_or(0),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -180,6 +195,7 @@ pub fn parse_codex_event(line: &str, acc: &mut CodexAccumulator) -> Vec<FeedItem
                     result: format!("{total} tokens used"),
                     cost_usd: None,
                     duration_ms: None,
+                    usage: Some(usage.normalize()),
                 });
             }
             items
@@ -575,8 +591,14 @@ mod tests {
         let items = parse_codex_event(line, &mut acc());
         assert_eq!(items.len(), 1);
         match &items[0] {
-            FeedItem::FinalResult { result, .. } => {
+            FeedItem::FinalResult { result, usage, .. } => {
                 assert!(result.contains("24885"));
+                // Codex `input_tokens` is the cache-inclusive prompt total, so
+                // it maps straight to context_tokens (no summing).
+                let usage = usage.expect("codex turn carries usage");
+                assert_eq!(usage.context_tokens, 24763);
+                assert_eq!(usage.cached_tokens, 24448);
+                assert_eq!(usage.output_tokens, 122);
             }
             other => panic!("expected FinalResult, got {other:?}"),
         }
