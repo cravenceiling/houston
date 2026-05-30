@@ -605,6 +605,22 @@ jobs:
         run: |
           ./scripts/rename-dmg-volume.sh "${{ steps.artifacts.outputs.dmg }}" "Houston Installer"
 
+      # rename-dmg-volume.sh rebuilds the DMG (hdiutil convert), which strips
+      # the Developer ID signature tauri-action applied to the original .dmg.
+      # Notarization staples a ticket but does NOT code-sign, so without this
+      # the DMG reaches "Verify complete signing chain" unsigned ("code object
+      # is not signed at all"). Re-sign with Developer ID here, before
+      # notarization, so the notarized + stapled DMG carries a valid signature.
+      # The identity is already in the keychain from the pre-sign import step.
+      - name: Re-sign DMG after volume rename
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          DMG="${{ steps.artifacts.outputs.dmg }}"
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG"
+          echo "=== Re-signed DMG with Developer ID ==="
+          codesign -vvv "$DMG"
+
       - name: Notarize DMG
         timeout-minutes: 25
         run: |
@@ -1003,13 +1019,16 @@ jobs:
       # Sentry upload (Windows): Rust debug symbols for the matrix-arch
       # houston-engine.exe + its .pdb (MSVC emits PDBs alongside the binary
        # in release mode with debug = "line-tables-only" in workspace Cargo).
-      # Source maps are uploaded once by the macOS job — same JS bundle ships
-      # to both platforms, so we don't duplicate the upload here.
+      # Source maps are uploaded per-arch (NOT once from the macOS job): Vite
+      # content-hashes the bundle on every build, so the Windows x64 / arm64 /
+      # macOS bundles ship distinct filenames (e.g. index-<hash>.js). Uploading
+      # only from macOS left every Windows JS frame unmatchable; each arch must
+      # upload its own app/dist to the shared release.
       #
       # x86_64 + aarch64 each run this in parallel via the matrix; both
       # contribute their debug symbols to the same `houston-app@<version>`
       # release. Skips silently when SENTRY_AUTH_TOKEN is unset.
-      - name: Upload Rust debug symbols to Sentry (${{ matrix.arch }})
+      - name: Upload source maps + Rust debug symbols to Sentry (${{ matrix.arch }})
         if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
         shell: bash
         env:
@@ -1023,12 +1042,38 @@ jobs:
 
           curl -sL https://sentry.io/get-cli/ | bash
 
+          # get-cli installs to /usr/local/bin, which is on PATH on the macOS
+          # runner but NOT on the Windows git-bash runner (the upload there
+          # failed with "sentry-cli: command not found", exit 127). Resolve the
+          # binary explicitly so it works regardless of PATH or the .exe suffix
+          # the Windows download lands with.
+          SENTRY_CLI=$(command -v sentry-cli || true)
+          if [ -z "$SENTRY_CLI" ]; then
+            for candidate in /usr/local/bin/sentry-cli /usr/local/bin/sentry-cli.exe; do
+              if [ -x "$candidate" ]; then SENTRY_CLI="$candidate"; break; fi
+            done
+          fi
+          if [ -z "$SENTRY_CLI" ]; then
+            echo "::error::sentry-cli not found after install" >&2
+            exit 1
+          fi
+          "$SENTRY_CLI" --version
+
+          echo "=== Inject + upload ${{ matrix.target }} Vite source maps ==="
+          # This arch's bundle carries its own Vite content-hashes, so its maps
+          # must be uploaded under the shared release or Windows JS frames stay
+          # minified in Sentry. `releases new` is idempotent and guards the
+          # parallel race with the macOS job, which also creates this release.
+          "$SENTRY_CLI" releases new "$RELEASE"
+          "$SENTRY_CLI" sourcemaps inject app/dist
+          "$SENTRY_CLI" sourcemaps upload --release "$RELEASE" app/dist
+
           echo "=== Upload ${{ matrix.target }} debug symbols ==="
           # MSVC emits the PDB next to the .exe; Rust converts the binary's
           # `-` to `_` for the PDB stem (houston-engine.exe → houston_engine.pdb).
           # Upload both — Sentry needs the PDB for symbolication but indexes
           # by the .exe's debug-id.
-          sentry-cli debug-files upload \
+          "$SENTRY_CLI" debug-files upload \
             "target/${{ matrix.target }}/release/houston-engine.exe" \
             "target/${{ matrix.target }}/release/houston_engine.pdb"
 
