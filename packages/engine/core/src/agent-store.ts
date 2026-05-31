@@ -6,7 +6,7 @@
  * backing up the bad file and rewriting the recovered prefix.
  */
 
-import type { Activity, ProjectConfig } from "@houston-ai/engine-protocol";
+import type { Activity, ActivityUpdate, NewActivity, ProjectConfig } from "@houston-ai/engine-protocol";
 import { randomUUID } from "node:crypto";
 import { readAgentFile, writeFileAtomic } from "./agent-files.ts";
 import { CoreError } from "./error.ts";
@@ -97,6 +97,55 @@ export function listActivities(root: string): Activity[] {
   return readJson<Activity[]>(root, "activity", []);
 }
 
+/** Create a board activity (mission). Bound to its session via `activity-{id}`. */
+export function createActivity(root: string, input: NewActivity): Activity {
+  const items = listActivities(root);
+  const id = randomUUID();
+  const activity: Activity = {
+    id,
+    title: input.title,
+    description: input.description ?? "",
+    status: "running",
+    claude_session_id: null,
+    session_key: `activity-${id}`,
+    agent: input.agent,
+    worktree_path: input.worktree_path ?? null,
+    updated_at: new Date().toISOString(),
+    provider: input.provider,
+    model: input.model,
+  };
+  items.push(activity);
+  writeJson(root, "activity", items);
+  return activity;
+}
+
+export function updateActivity(root: string, id: string, updates: ActivityUpdate): Activity {
+  const items = listActivities(root);
+  const item = items.find((a) => a.id === id);
+  if (!item) throw CoreError.notFound(`activity ${id}`);
+  if (updates.title !== undefined) item.title = updates.title;
+  if (updates.description !== undefined) item.description = updates.description;
+  if (updates.status !== undefined) item.status = updates.status;
+  if (updates.claude_session_id !== undefined) item.claude_session_id = updates.claude_session_id;
+  if (updates.session_key !== undefined) item.session_key = updates.session_key;
+  if (updates.agent !== undefined) item.agent = updates.agent;
+  if (updates.worktree_path !== undefined) item.worktree_path = updates.worktree_path;
+  if (updates.routine_id !== undefined) item.routine_id = updates.routine_id;
+  if (updates.routine_run_id !== undefined) item.routine_run_id = updates.routine_run_id;
+  if (updates.provider !== undefined) item.provider = updates.provider;
+  if (updates.model !== undefined) item.model = updates.model;
+  item.updated_at = new Date().toISOString();
+  writeJson(root, "activity", items);
+  return item;
+}
+
+export function deleteActivity(root: string, id: string): void {
+  const items = listActivities(root);
+  const next = items.filter((a) => a.id !== id);
+  if (next.length === items.length) throw CoreError.notFound(`activity ${id}`);
+  writeJson(root, "activity", next);
+}
+
 /**
  * Flip the board status of the activity addressed by `sessionKey`. An activity
  * is addressed either by its explicit `session_key` or by the `activity-<id>`
@@ -109,15 +158,18 @@ export function setActivityStatusBySessionKey(
   status: string,
 ): boolean {
   const items = listActivities(root);
-  let changed = false;
-  for (const a of items) {
-    const key = a.session_key ?? `activity-${a.id}`;
-    if (key === sessionKey) {
-      a.status = status;
-      a.updated_at = new Date().toISOString();
-      changed = true;
-    }
+  const impliedId = sessionKey.startsWith("activity-") ? sessionKey.slice("activity-".length) : null;
+  const item = items.find(
+    (a) => a.session_key === sessionKey || (impliedId !== null && a.id === impliedId),
+  );
+  if (!item) return false;
+  // Backfill the session_key when matched via the `activity-{id}` convention so
+  // future lookups hit the fast path.
+  if (item.session_key !== sessionKey) item.session_key = sessionKey;
+  if (item.status !== status) {
+    item.status = status;
+    item.updated_at = new Date().toISOString();
   }
-  if (changed) writeJson(root, "activity", items);
-  return changed;
+  writeJson(root, "activity", items);
+  return true;
 }

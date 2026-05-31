@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import {
   type EngineState,
+  createActivity,
   createFolder,
+  deleteActivity,
   deleteFile,
   listActivities,
   listProjectFiles,
@@ -10,11 +12,14 @@ import {
   readProjectFile,
   renameFile,
   resolveAgentDir,
+  updateActivity,
   writeAgentFile,
   writeConfig,
 } from "@houston-ai/engine-core";
 import {
+  activityUpdateSchema,
   createFolderBodySchema,
+  newActivitySchema,
   projectConfigSchema,
   readAgentFileBodySchema,
   renameFileBodySchema,
@@ -91,10 +96,30 @@ export function agentFileRoutes(engine: EngineState): Hono {
     return c.json(cfg);
   });
 
-  // -- activities (read) --
+  // -- activities (board missions) --
   r.get("/agents/activities", (c) => {
     const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
     return c.json(listActivities(dir(agentPath)));
+  });
+  r.post("/agents/activities", async (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    const body = newActivitySchema.parse(await c.req.json());
+    const activity = createActivity(dir(agentPath), body);
+    engine.events.emit({ type: "ActivityChanged", data: { agent_path: agentPath } });
+    return c.json(activity);
+  });
+  r.patch("/agents/activities/:id", async (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    const body = activityUpdateSchema.parse(await c.req.json());
+    const activity = updateActivity(dir(agentPath), c.req.param("id"), body);
+    engine.events.emit({ type: "ActivityChanged", data: { agent_path: agentPath } });
+    return c.json(activity);
+  });
+  r.delete("/agents/activities/:id", (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    deleteActivity(dir(agentPath), c.req.param("id"));
+    engine.events.emit({ type: "ActivityChanged", data: { agent_path: agentPath } });
+    return empty();
   });
 
   return r;

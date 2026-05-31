@@ -154,6 +154,10 @@ async function runTurn(engine: EngineState, params: StartTurnParams): Promise<vo
         tools: createTools(workingDir),
       },
       sessionId,
+      // Supply the provider's OAuth access token (auto-refreshed) so a
+      // subscription-logged-in account drives the turn; undefined falls back to
+      // an env API key.
+      getApiKey: (provider: string) => engine.auth.oauthApiKeyFor(provider),
       ...(resolved.streamFn ? { streamFn: resolved.streamFn } : {}),
     });
     agent.subscribe((event) => sink.onEvent(event));

@@ -82,10 +82,41 @@ export class ProviderAuth {
     };
   }
 
-  /** Stored access token for a logged-in provider (for the session runtime). */
+  /** Stored access token for a logged-in provider (synchronous, no refresh). */
   accessToken(houstonName: string): string | undefined {
     const id = OAUTH_ID[houstonName];
     return id ? this.store.get(id)?.access : undefined;
+  }
+
+  /**
+   * API key the session runtime should use for a pi provider, or undefined to
+   * fall back to env keys. pi's Anthropic provider auto-detects oauth tokens
+   * (`sk-ant-oat`) and switches to Bearer + claude-code/oauth beta headers, so
+   * handing it the (auto-refreshed) access token "just works". Codex
+   * subscription chat needs the codex-responses model path, which isn't wired
+   * yet, so we don't feed its token to the standard provider.
+   */
+  async oauthApiKeyFor(piProvider: string): Promise<string | undefined> {
+    if (piProvider !== "anthropic") return undefined;
+    return this.refreshedAccessToken("anthropic");
+  }
+
+  private async refreshedAccessToken(houstonName: string): Promise<string | undefined> {
+    const id = OAUTH_ID[houstonName];
+    if (!id) return undefined;
+    const creds = this.store.get(id);
+    if (!creds) return undefined;
+    if (Date.now() < creds.expires) return creds.access;
+    const provider = getOAuthProvider(id);
+    if (!provider) return creds.access;
+    try {
+      const refreshed = await provider.refreshToken(creds);
+      this.store.set(id, refreshed);
+      return refreshed.access;
+    } catch (e) {
+      log.warn(`[oauth] token refresh failed for ${houstonName}:`, e);
+      return creds.access; // let the provider reject a truly-dead token
+    }
   }
 
   /** Launch the browser-approve login flow. Returns immediately; progress and

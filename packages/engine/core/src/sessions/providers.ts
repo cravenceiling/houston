@@ -29,6 +29,22 @@ const PI_PROVIDER: Record<string, string> = {
   gemini: "google",
 };
 
+/**
+ * Houston short model aliases -> concrete pi model ids. Houston configs use
+ * either a short alias ("sonnet") or a full id ("claude-opus-4-8"); full ids
+ * pass through. Extend as new models ship.
+ */
+const ANTHROPIC_ALIAS: Record<string, string> = {
+  sonnet: "claude-sonnet-4-5",
+  opus: "claude-opus-4-8",
+  haiku: "claude-haiku-4-5",
+};
+
+function resolveModelId(houstonProvider: string, alias: string): string {
+  if (houstonProvider === "anthropic") return ANTHROPIC_ALIAS[alias] ?? alias;
+  return alias;
+}
+
 export const defaultModelResolver: ModelResolver = (providerId, modelAlias) => {
   const piProvider = PI_PROVIDER[providerId] ?? providerId;
   if (!modelAlias) {
@@ -36,18 +52,19 @@ export const defaultModelResolver: ModelResolver = (providerId, modelAlias) => {
       `no model configured for provider "${providerId}"; set a model in the agent config`,
     );
   }
+  const modelId = resolveModelId(providerId, modelAlias);
   let model: Model<any> | undefined;
   try {
     // Cast: the agent config carries arbitrary provider/model strings; pi's
     // registry validates them at runtime.
-    model = getModel(piProvider as never, modelAlias as never) as Model<any> | undefined;
+    model = getModel(piProvider as never, modelId as never) as Model<any> | undefined;
   } catch (e) {
     throw CoreError.badRequest(
-      `unknown model "${modelAlias}" for provider "${providerId}": ${e instanceof Error ? e.message : String(e)}`,
+      `unknown model "${modelId}" for provider "${providerId}": ${e instanceof Error ? e.message : String(e)}`,
     );
   }
   if (!model) {
-    throw CoreError.badRequest(`unknown model "${modelAlias}" for provider "${providerId}"`);
+    throw CoreError.badRequest(`unknown model "${modelId}" for provider "${providerId}"`);
   }
   return { model };
 };

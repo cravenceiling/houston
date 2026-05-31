@@ -143,6 +143,33 @@ export const onboardingStartRequestSchema = z.object({
   sessionKey: z.string().min(1),
 });
 
+// ---------- Activities (board missions) ----------
+
+export const newActivitySchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  agent: z.string().optional(),
+  worktree_path: z.string().optional(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+});
+
+export const activityUpdateSchema = z
+  .object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    status: z.string().optional(),
+    claude_session_id: z.string().nullable().optional(),
+    session_key: z.string().optional(),
+    agent: z.string().optional(),
+    worktree_path: z.string().nullable().optional(),
+    routine_id: z.string().optional(),
+    routine_run_id: z.string().optional(),
+    provider: z.string().optional(),
+    model: z.string().optional(),
+  })
+  .passthrough();
+
 // ---------- Providers ----------
 
 export const loginCodeSchema = z.object({

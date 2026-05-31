@@ -11,9 +11,12 @@ It speaks the **same `/v1` HTTP + WebSocket protocol**, reads/writes the **same
 desktop app, mobile PWA, and `examples/smartbooks` consume it unchanged. There
 is **no proxy**: wire-compatibility *is* the bridge.
 
-> Status: foundation + a proven end-to-end live chat turn. This is an in-progress
-> parity effort — see the roadmap. The Rust engine in `engine/` is untouched and
-> remains the production engine.
+> Status: foundation + a proven end-to-end live chat turn (incl. real Anthropic
+> via API key or OAuth login). In-progress parity effort — see the roadmap. The
+> Rust engine in `engine/` is untouched and remains the production engine.
+>
+> **New here? [`RUN.md`](./RUN.md) has copy-paste run commands** (terminal-only
+> real Claude turn, and the desktop app with OAuth login).
 
 ## Packages
 
@@ -119,7 +122,7 @@ HOUSTON_HOME=/tmp/fix HOUSTON_ENGINE_TOKEN=t bun run packages/engine/core/script
 | M1 — server + auth + WS firehose + banner + watchdog + engine.json | ✅ |
 | M2 — read domain (workspaces, agents, `.houston` files, project files, config, activities) | ✅ |
 | M3 — live chat turn via pi (streaming, tools, file-change attribution, chat_feed, board flips, history, cancel) | ✅ |
-| M4 — providers/auth | 🟡 OAuth login (Claude + Codex, browser-approve) done; remaining: use the OAuth token in model requests (Anthropic oauth Bearer + beta header, Codex responses base URL), the Houston model-alias table, and the full `ProviderError` taxonomy |
+| M4 — providers/auth | 🟡 OAuth login (Claude + Codex) + **Anthropic chat via the OAuth token** (pi auto-detects `sk-ant-oat` → Bearer + beta headers) + model-alias table (`sonnet`→`claude-sonnet-4-5`, …) + activity (board mission) CRUD done; remaining: Codex subscription chat (codex-responses path) and the full `ProviderError` taxonomy |
 | M5 — routines + scheduler (cron, run-now/cancel, heartbeat) | ⬜ |
 | M6 — store, skills (+ community), portable agent share/import | ⬜ |
 | M7 — attachments (two-phase upload), worktrees, `/shell`, file watcher | ⬜ |
