@@ -63,7 +63,17 @@ const server = Bun.serve({
 });
 const app = buildApp(engine);
 const client = new HoustonClient({ baseUrl: `http://127.0.0.1:${server.port}`, token: config.token });
-const agentPath = (await client.listAgents("ws-1"))[0].folderPath;
+const workspaces = await client.listWorkspaces();
+if (workspaces.length === 0) {
+  console.error("No workspaces in HOUSTON_HOME — run the scratch-home script first.");
+  process.exit(2);
+}
+const agents = await client.listAgents(workspaces[0].id);
+if (agents.length === 0) {
+  console.error("No agents in the first workspace — run the scratch-home script first.");
+  process.exit(2);
+}
+const agentPath = agents[0].folderPath;
 
 // activity CRUD
 const activity = await client.createActivity(agentPath, { title: "Q4 report" });

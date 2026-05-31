@@ -1,104 +1,111 @@
 # Running the TypeScript engine — step by step
 
-This is the no-assumptions guide. Run every command from the **repo root**
-(the folder that contains `app/`, `engine/`, `packages/`).
+No-assumptions guide. Run everything from the **repo root** (the folder with
+`app/`, `engine/`, `packages/`).
+
+- **Windows 11** → use the PowerShell commands below.
+- macOS / Linux → see the [bash section](#macos--linux-bash) at the bottom.
+
+---
+
+# Windows (PowerShell)
 
 ## 0. One-time setup
 
 Install Bun (the runtime the engine uses):
 
-```bash
-curl -fsSL https://bun.sh/install | bash
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
 ```
 
-Then **close and reopen your terminal** (so `bun` is on your PATH), and install
-dependencies:
+**Close and reopen PowerShell** so `bun` is on your PATH, then:
 
-```bash
+```powershell
 pnpm install
-```
-
-Make sure you're on the engine branch:
-
-```bash
 git checkout worktree-ts-engine
 ```
 
----
+## Path A — a real Claude reply in your terminal (needs an API key, no app)
 
-## Path A — see a real Claude reply in your terminal (no desktop app)
+Fastest way to confirm a real model turn works. You need an Anthropic **API key**
+(`sk-ant-...` from console.anthropic.com).
 
-This is the fastest way to confirm a real model turn works. You need an
-Anthropic **API key** (`sk-ant-...` from console.anthropic.com).
-
-```bash
-# 1. make a throwaway home with one agent (doesn't touch your real ~/.houston)
-export HOUSTON_HOME=/tmp/houston-ts-demo
-bash packages/engine/scripts/scratch-home.sh
+```powershell
+# 1. throwaway home with one agent (won't touch your real ~/.houston)
+$env:HOUSTON_HOME = "$env:TEMP\houston-ts-demo"
+powershell -ExecutionPolicy Bypass -File packages\engine\scripts\scratch-home.ps1
 
 # 2. sanity check (no key needed — uses a fake model)
 bun run packages/engine/core/scripts/verify.ts          # prints VERIFY_OK
 
 # 3. a REAL Claude turn (uses your key)
-export ANTHROPIC_API_KEY=sk-ant-...your-key...
+$env:ANTHROPIC_API_KEY = "sk-ant-...your-key..."
 bun run packages/engine/core/scripts/real-turn.ts "Write a haiku about engines and save it to poem.txt"
 ```
 
-You'll watch Claude stream its reply and create `poem.txt` inside the scratch
-agent folder (`/tmp/houston-ts-demo/workspaces/Personal/Buddy/`).
+You'll watch Claude stream its reply and create `poem.txt` in the scratch agent
+folder (`%TEMP%\houston-ts-demo\workspaces\Personal\Buddy\`).
 
----
+## Path B — the real desktop app, "Sign in with Anthropic" (your subscription)
 
-## Path B — the real desktop app, signing in with your subscription (OAuth)
+Uses the browser sign-in (no API key) with your real `%USERPROFILE%\.houston`.
 
-This uses the **"Sign in with Anthropic"** browser flow (no API key), with your
-real `~/.houston` workspaces.
-
-```bash
-# 1. build the engine into a single binary
-bun build --compile packages/engine/server/src/main.ts \
-  --outfile packages/engine/server/dist/houston-engine
+```powershell
+# 1. build the engine into a single .exe
+bun build --compile packages/engine/server/src/main.ts --outfile packages\engine\server\dist\houston-engine.exe
 
 # 2. launch the desktop app pointed at it
-HOUSTON_ENGINE_BIN="$PWD/packages/engine/server/dist/houston-engine" \
-  pnpm --dir app tauri dev
+$env:HOUSTON_ENGINE_BIN = "$PWD\packages\engine\server\dist\houston-engine.exe"
+pnpm --dir app tauri dev
 ```
 
-In the app:
+In the app: it boots against the TS engine → open provider settings → **Sign in
+with Anthropic** → approve in the browser → start a mission and chat.
 
-1. It boots against the TS engine (you'll land in your normal workspace if you
-   already have one).
-2. Open provider settings and click **Sign in with Anthropic** (or ChatGPT for
-   Codex) → a browser tab opens → approve → you're back in the app, signed in.
-3. Start a mission and chat. Claude streams a real reply and can read/write
-   files in the agent folder.
-
-> Rebuilt the engine? Re-run step 1 and restart the app — the binary is a
-> snapshot, not live-reloaded.
+> Rebuilt the engine? Re-run step 1 and restart the app — the .exe is a snapshot.
 
 ---
 
 ## What works vs. what doesn't (yet)
 
 **Works:** boot/handshake, workspaces + agents, file browser with live updates,
-board missions (create / chat / status), **real Claude chat** (Path A via API
-key, Path B via OAuth login), provider OAuth login for Claude + Codex.
+board missions, **real Claude chat** (Path A via key, Path B via OAuth login),
+OAuth login for Claude + Codex.
 
-**Not yet (these tabs/actions will be empty or error in the app):** routines,
-store, skills, Composio integrations, conversations list, worktrees,
-attachments, and **chatting through a Codex (ChatGPT) subscription** — Codex
-*login* works, but using that token for a turn needs the codex-responses path
-(a follow-up). See the roadmap in `packages/engine/README.md`.
+**Not yet (empty/erroring in the app):** routines, store, skills, Composio,
+conversations list, worktrees, attachments, and **chatting through a Codex
+(ChatGPT) subscription** — Codex *login* works, the turn needs a follow-up. See
+`packages/engine/README.md`.
+
+## Troubleshooting (Windows)
+
+- **`bun` not found** → reopen PowerShell after installing Bun.
+- **running `.ps1` is blocked** → use the `powershell -ExecutionPolicy Bypass
+  -File ...` form shown above.
+- **"No Anthropic auth found"** from `real-turn.ts` → set `ANTHROPIC_API_KEY`,
+  or use Path B and sign in first.
+- **The agent's `bash` tool errors** → on Windows the `bash` tool needs Git Bash
+  on your PATH (the Houston app bundles it). The `read`/`write`/`edit` tools work
+  everywhere — the sample prompt only uses `write`.
 
 ---
 
-## Troubleshooting
+# macOS / Linux (bash)
 
-- **`bun: command not found`** — reopen your terminal after installing Bun, or
-  run `source ~/.zshrc` (or `~/.bashrc`).
-- **"No Anthropic auth found"** from `real-turn.ts` — set `ANTHROPIC_API_KEY`,
-  or use Path B and sign in first.
-- **App shows a provider error when chatting** — you're not signed in (Path B)
-  or the key is missing/invalid (Path A).
-- **Want to watch the engine's logs** — they go to stderr; in Path A you see
-  them inline. The app captures them to its `engine.log`.
+```bash
+# setup
+curl -fsSL https://bun.sh/install | bash      # reopen terminal afterwards
+pnpm install
+git checkout worktree-ts-engine
+
+# Path A — real Claude turn in the terminal (needs a key)
+export HOUSTON_HOME=/tmp/houston-ts-demo
+bash packages/engine/scripts/scratch-home.sh
+bun run packages/engine/core/scripts/verify.ts                       # VERIFY_OK
+export ANTHROPIC_API_KEY=sk-ant-...
+bun run packages/engine/core/scripts/real-turn.ts "Write a haiku and save it to poem.txt"
+
+# Path B — desktop app with OAuth login
+bun build --compile packages/engine/server/src/main.ts --outfile packages/engine/server/dist/houston-engine
+HOUSTON_ENGINE_BIN="$PWD/packages/engine/server/dist/houston-engine" pnpm --dir app tauri dev
+```
