@@ -18,4 +18,6 @@ export * from "./workspaces.ts";
 export * from "./agents.ts";
 export * from "./agent-files.ts";
 export * from "./agent-store.ts";
+export * from "./auth/oauth-store.ts";
+export * from "./auth/provider-auth.ts";
 export * from "./sessions/index.ts";

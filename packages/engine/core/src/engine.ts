@@ -14,6 +14,7 @@ import { EventBus } from "./events.ts";
 import { Db } from "./db.ts";
 import { TurnControl } from "./sessions/control.ts";
 import { type ModelResolver, defaultModelResolver } from "./sessions/providers.ts";
+import { ProviderAuth } from "./auth/provider-auth.ts";
 
 export interface EngineOptions {
   /** Override how a provider + model alias resolves to a pi model. */
@@ -27,6 +28,7 @@ export class EngineState {
   readonly db: Db;
   readonly control: TurnControl;
   readonly modelResolver: ModelResolver;
+  readonly auth: ProviderAuth;
 
   constructor(config: EngineConfig, options: EngineOptions = {}) {
     this.config = config;
@@ -35,5 +37,6 @@ export class EngineState {
     this.db = new Db(this.paths.dbPath());
     this.control = new TurnControl();
     this.modelResolver = options.modelResolver ?? defaultModelResolver;
+    this.auth = new ProviderAuth(config.homeDir, this.events);
   }
 }

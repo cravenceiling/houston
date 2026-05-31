@@ -19,6 +19,8 @@ import { workspaceRoutes } from "./routes/workspaces.ts";
 import { agentFileRoutes } from "./routes/files.ts";
 import { sessionRoutes } from "./routes/sessions.ts";
 import { preferenceRoutes } from "./routes/preferences.ts";
+import { providerRoutes } from "./routes/providers.ts";
+import { claudeRoutes } from "./routes/claude.ts";
 
 export function buildApp(engine: EngineState): Hono {
   const app = new Hono();
@@ -52,6 +54,8 @@ export function buildApp(engine: EngineState): Hono {
   app.route("/v1", agentFileRoutes(engine));
   app.route("/v1", sessionRoutes(engine));
   app.route("/v1", preferenceRoutes(engine));
+  app.route("/v1", providerRoutes(engine));
+  app.route("/v1", claudeRoutes());
 
   return app;
 }

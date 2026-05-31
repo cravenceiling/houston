@@ -83,6 +83,24 @@ The binary emits the `HOUSTON_ENGINE_LISTENING port=<p> token=<t>` banner, write
 `<home>/engine.json` (`{version, protocol, port, pid, token_hash}`), and
 self-terminates on stdin EOF — exactly what the supervisor expects.
 
+## Provider login (OAuth)
+
+`POST /v1/providers/:name/login` (`anthropic` or `openai`) runs pi-ai's
+browser-approve OAuth loopback — the same "open the link, approve in your
+browser" flow as Claude Code / Codex:
+
+1. the engine starts pi-ai's localhost callback server and emits the sign-in URL
+   as a `ProviderLoginUrl` WS event (topic `providers`);
+2. the user opens it and approves; the provider redirects to the local callback;
+3. the engine persists the OAuth credentials to `<home>/oauth/auth.json` (0600)
+   and emits `ProviderLoginComplete`. `GET /v1/providers/:name/status` then
+   reports `authenticated`.
+
+`POST .../login/code` (paste-back for remote engines), `POST .../login/cancel`,
+and `POST .../logout` round out the surface. In the desktop app this drives the
+"Sign in with Anthropic / ChatGPT" button. Using that token in an actual model
+turn (oauth Bearer + beta headers, Codex base URL) is the remaining M4 step.
+
 ## Test / prove
 
 `core/scripts/proof.ts` boots the real server with a **faux** model injected at the
@@ -101,7 +119,7 @@ HOUSTON_HOME=/tmp/fix HOUSTON_ENGINE_TOKEN=t bun run packages/engine/core/script
 | M1 — server + auth + WS firehose + banner + watchdog + engine.json | ✅ |
 | M2 — read domain (workspaces, agents, `.houston` files, project files, config, activities) | ✅ |
 | M3 — live chat turn via pi (streaming, tools, file-change attribution, chat_feed, board flips, history, cancel) | ✅ |
-| M4 — providers/auth: pi-ai `./oauth` login flows, Houston model-alias table, full `ProviderError` taxonomy → `provider-error-card` | ⬜ |
+| M4 — providers/auth | 🟡 OAuth login (Claude + Codex, browser-approve) done; remaining: use the OAuth token in model requests (Anthropic oauth Bearer + beta header, Codex responses base URL), the Houston model-alias table, and the full `ProviderError` taxonomy |
 | M5 — routines + scheduler (cron, run-now/cancel, heartbeat) | ⬜ |
 | M6 — store, skills (+ community), portable agent share/import | ⬜ |
 | M7 — attachments (two-phase upload), worktrees, `/shell`, file watcher | ⬜ |

@@ -221,6 +221,14 @@ export const Event = {
     type: "Toast",
     data: { message, variant },
   }),
+  providerLoginUrl: (provider: string, url: string, userCode: string | null): HoustonEvent => ({
+    type: "ProviderLoginUrl",
+    data: { provider, url, user_code: userCode },
+  }),
+  providerLoginComplete: (provider: string, success: boolean, error: string | null): HoustonEvent => ({
+    type: "ProviderLoginComplete",
+    data: { provider, success, error },
+  }),
 } as const;
 
 /** The firehose topic — receives every event regardless of routing topic. */

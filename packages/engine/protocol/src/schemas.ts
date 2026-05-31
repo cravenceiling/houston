@@ -142,3 +142,9 @@ export const sessionStartRequestSchema = z.object({
 export const onboardingStartRequestSchema = z.object({
   sessionKey: z.string().min(1),
 });
+
+// ---------- Providers ----------
+
+export const loginCodeSchema = z.object({
+  code: z.string().min(1),
+});

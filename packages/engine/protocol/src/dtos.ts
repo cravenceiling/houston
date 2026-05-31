@@ -273,3 +273,27 @@ export interface GenerateInstructionsResult {
   suggestedIntegrations: SuggestedIntegration[];
   suggestedRoutine?: SuggestedRoutine | null;
 }
+
+// ---------- Providers ----------
+
+export type CliInstallSource = "bundled" | "managed" | "path" | "missing";
+export type ProviderAuthState = "authenticated" | "unauthenticated" | "unknown";
+
+export interface ProviderStatus {
+  provider: string;
+  cliInstalled: boolean;
+  authState: ProviderAuthState;
+  cliName: string;
+  installSource: CliInstallSource;
+  cliPath: string | null;
+}
+
+// ---------- Claude Code installer (TS engine reports installed: it uses pi, not the CLI) ----------
+
+export interface ClaudeStatus {
+  installed: boolean;
+  installPath: string;
+  pinnedVersion: string | null;
+  installedVersion: string | null;
+  lastInstallError: unknown | null;
+}
