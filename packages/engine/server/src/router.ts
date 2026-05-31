@@ -18,6 +18,7 @@ import { healthRoutes } from "./routes/health.ts";
 import { workspaceRoutes } from "./routes/workspaces.ts";
 import { agentFileRoutes } from "./routes/files.ts";
 import { sessionRoutes } from "./routes/sessions.ts";
+import { preferenceRoutes } from "./routes/preferences.ts";
 
 export function buildApp(engine: EngineState): Hono {
   const app = new Hono();
@@ -50,6 +51,7 @@ export function buildApp(engine: EngineState): Hono {
   app.route("/v1", workspaceRoutes(engine));
   app.route("/v1", agentFileRoutes(engine));
   app.route("/v1", sessionRoutes(engine));
+  app.route("/v1", preferenceRoutes(engine));
 
   return app;
 }
