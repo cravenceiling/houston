@@ -1,0 +1,29 @@
+{
+  "name": "@houston-ai/engine-server",
+  "version": "0.1.0",
+  "description": "HTTP + WebSocket server for the TypeScript Houston Engine. Wire-compatible drop-in for the Rust `houston-engine` binary: same /v1 REST + /v1/ws contract, same ~/.houston data, same HOUSTON_ENGINE_LISTENING sidecar handshake. Runs on Bun.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "bin": {
+    "houston-engine": "src/main.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "bun run src/main.ts",
+    "dev": "bun run --watch src/main.ts",
+    "build:binary": "bun build --compile src/main.ts --outfile dist/houston-engine"
+  },
+  "dependencies": {
+    "@houston-ai/engine-protocol": "workspace:*",
+    "@houston-ai/engine-core": "workspace:*",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@houston-ai/engine-core",
+  "version": "0.1.0",
+  "description": "Domain runtime for the TypeScript Houston Engine: paths, config, the in-process event bus, workspaces/agents/.houston file I/O, the pi-driven session runtime, and chat-feed persistence. Frontend-agnostic; no HTTP. Runs the agent loop in-process via @earendil-works/pi-agent-core + pi-ai.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@houston-ai/engine-protocol": "workspace:*",
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-agent-core": "^0.78.0",
+    "typebox": "^1.1.38",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.6.0"
+  }
+}
