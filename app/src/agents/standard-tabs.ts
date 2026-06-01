@@ -24,6 +24,7 @@ export const STANDARD_TABS: AgentTab[] = [
   { id: "files", label: "Files", builtIn: "files" },
   { id: "job-description", label: "Job Description", builtIn: "job-description" },
   { id: "integrations", label: "Integrations", builtIn: "integrations" },
+  { id: "archived", label: "Archived", builtIn: "archived" },
 ];
 
 export const DEFAULT_TAB_ID = "activity";

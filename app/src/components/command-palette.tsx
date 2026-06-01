@@ -63,7 +63,9 @@ export function CommandPalette() {
   const recentMissions = useMemo(() => {
     if (!convos) return [];
     return convos
-      .filter((c) => c.type === "activity")
+      // Archived missions live in the per-agent Archived tab, not the
+      // quick-switcher's recent list.
+      .filter((c) => c.type === "activity" && c.status !== "archived")
       .slice()
       .sort((a, b) =>
         (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
