@@ -1,8 +1,15 @@
 import { Hono } from "hono";
-import { type EngineState, cancelTurn, loadHistory, startTurn } from "@houston-ai/engine-core";
+import {
+  type EngineState,
+  cancelTurn,
+  loadHistory,
+  startTurn,
+  summarize,
+} from "@houston-ai/engine-core";
 import {
   onboardingStartRequestSchema,
   sessionStartRequestSchema,
+  summarizeRequestSchema,
 } from "@houston-ai/engine-protocol";
 import { ApiError } from "../errors.ts";
 
@@ -57,6 +64,13 @@ export function sessionRoutes(engine: EngineState): Hono {
 
   r.get("/agents/:agentPath/sessions/:key/history", (c) => {
     return c.json(loadHistory(engine, c.req.param("agentPath"), c.req.param("key")));
+  });
+
+  // Title/description for a new conversation. Never fails the request — model
+  // errors degrade to a deterministic local title inside `summarize`.
+  r.post("/sessions/summarize", async (c) => {
+    const body = summarizeRequestSchema.parse(await c.req.json());
+    return c.json(await summarize(engine, body));
   });
 
   return r;

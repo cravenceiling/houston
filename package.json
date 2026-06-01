@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
+    "dev:ts-engine": "bun scripts/dev-ts-engine.mjs",
+    "build:ts-engine": "pnpm --filter @houston-ai/engine-server build:binary",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

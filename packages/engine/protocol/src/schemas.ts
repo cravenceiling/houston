@@ -143,6 +143,13 @@ export const onboardingStartRequestSchema = z.object({
   sessionKey: z.string().min(1),
 });
 
+export const summarizeRequestSchema = z.object({
+  message: z.string(),
+  agentPath: z.string().optional(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+});
+
 // ---------- Activities (board missions) ----------
 
 export const newActivitySchema = z.object({
@@ -170,8 +177,76 @@ export const activityUpdateSchema = z
   })
   .passthrough();
 
+// ---------- Routines (snake_case bodies, agentPath query) ----------
+
+export const newRoutineSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  prompt: z.string(),
+  schedule: z.string(),
+  enabled: z.boolean().optional(),
+  suppress_when_silent: z.boolean().optional(),
+  timezone: z.string().nullable().optional(),
+  integrations: z.array(z.string()).optional(),
+});
+
+export const routineUpdateSchema = z
+  .object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    prompt: z.string().optional(),
+    schedule: z.string().optional(),
+    enabled: z.boolean().optional(),
+    suppress_when_silent: z.boolean().optional(),
+    timezone: z.string().nullable().optional(),
+    integrations: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+export const routineRunStatusSchema = z.enum([
+  "running",
+  "silent",
+  "surfaced",
+  "error",
+  "cancelled",
+]);
+
+export const routineRunUpdateSchema = z
+  .object({
+    status: routineRunStatusSchema.optional(),
+    activity_id: z.string().optional(),
+    summary: z.string().optional(),
+    completed_at: z.string().optional(),
+    paused_until: z.string().nullable().optional(),
+  })
+  .passthrough();
+
 // ---------- Providers ----------
 
 export const loginCodeSchema = z.object({
   code: z.string().min(1),
+});
+
+// ---------- Watcher (camelCase) ----------
+
+export const watcherStartSchema = z.object({
+  agentPath: z.string().min(1),
+});
+
+// ---------- Skills (camelCase) ----------
+
+export const skillsWorkspaceQuerySchema = z.object({
+  workspacePath: z.string().min(1),
+});
+
+export const createSkillSchema = z.object({
+  workspacePath: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  content: z.string(),
+});
+
+export const saveSkillSchema = z.object({
+  workspacePath: z.string().min(1),
+  content: z.string(),
 });

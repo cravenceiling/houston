@@ -9,3 +9,4 @@ export * from "./file-changes.ts";
 export * from "./session-id.ts";
 export * from "./runtime.ts";
 export * from "./history.ts";
+export * from "./summarize.ts";

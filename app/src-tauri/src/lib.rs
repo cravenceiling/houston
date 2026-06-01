@@ -298,6 +298,7 @@ pub fn run() {
             }
             // 30s banner timeout: first-run Gatekeeper scan on a notarized
             // sidecar can take 15–20s on slow machines.
+            let engine_bin_display = binary.display().to_string();
             let slot = spawn_supervisor(binary, Duration::from_secs(30), engine_env, cb)
                 .expect("failed to spawn houston-engine");
             let handshake = {
@@ -319,6 +320,35 @@ pub fn run() {
             // and re-fired identically on every relaunch.
             wait_until_healthy(&handshake, Duration::from_secs(30))
                 .expect("engine did not pass /v1/health in time");
+
+            // Loud "which engine" banner — the #1 dev confusion is silently
+            // running the Rust sidecar when you meant to test the TS engine
+            // (resolve order: HOUSTON_ENGINE_BIN -> target/debug Rust -> staged
+            // sidecar). The binary path + the version it wrote to engine.json
+            // make it unmistakable: TS engine = 0.1.x, Rust engine = crate
+            // version (e.g. 0.4.15).
+            let engine_version = std::fs::read_to_string(houston.join("engine.json"))
+                .ok()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                .and_then(|v| {
+                    v.get("version")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string)
+                })
+                .unwrap_or_else(|| "unknown".to_string());
+            eprintln!(
+                "\n┌─ HOUSTON ENGINE ──────────────────────────────\n\
+                 │ binary : {engine_bin_display}\n\
+                 │ version: {engine_version}\n\
+                 │ url    : {}\n\
+                 └───────────────────────────────────────────────\n",
+                handshake.base_url(),
+            );
+            tracing::info!(
+                engine_version = %engine_version,
+                binary = %engine_bin_display,
+                "houston-engine ready"
+            );
 
             // Stash the handshake so the frontend can pull it via
             // `get_engine_handshake` — wins the race when the one-shot

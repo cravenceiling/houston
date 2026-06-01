@@ -15,6 +15,7 @@ import { Db } from "./db.ts";
 import { TurnControl } from "./sessions/control.ts";
 import { type ModelResolver, defaultModelResolver } from "./sessions/providers.ts";
 import { ProviderAuth } from "./auth/provider-auth.ts";
+import { AgentWatcher } from "./watcher.ts";
 
 export interface EngineOptions {
   /** Override how a provider + model alias resolves to a pi model. */
@@ -29,6 +30,7 @@ export class EngineState {
   readonly control: TurnControl;
   readonly modelResolver: ModelResolver;
   readonly auth: ProviderAuth;
+  readonly watcher: AgentWatcher;
 
   constructor(config: EngineConfig, options: EngineOptions = {}) {
     this.config = config;
@@ -38,5 +40,6 @@ export class EngineState {
     this.control = new TurnControl();
     this.modelResolver = options.modelResolver ?? defaultModelResolver;
     this.auth = new ProviderAuth(config.homeDir, this.events);
+    this.watcher = new AgentWatcher(this.events);
   }
 }

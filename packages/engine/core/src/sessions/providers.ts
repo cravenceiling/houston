@@ -22,10 +22,17 @@ export interface ResolvedModel {
 
 export type ModelResolver = (providerId: string, modelAlias: string | undefined) => ResolvedModel;
 
-/** Houston provider id -> pi provider id. */
+/**
+ * Houston provider id -> pi provider id. Houston `openai` means
+ * "ChatGPT subscription via Codex" — its models live under pi's `openai-codex`
+ * provider (the codex-responses backend at chatgpt.com/backend-api). The OAuth
+ * access token is supplied per-request by the runtime's `getApiKey` callback,
+ * which the resolved model reports as provider `openai-codex`.
+ */
 const PI_PROVIDER: Record<string, string> = {
   anthropic: "anthropic",
-  openai: "openai",
+  openai: "openai-codex",
+  "openai-codex": "openai-codex",
   gemini: "google",
 };
 

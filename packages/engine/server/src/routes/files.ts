@@ -3,16 +3,24 @@ import {
   type EngineState,
   createActivity,
   createFolder,
+  createRoutine,
+  createRoutineRun,
   deleteActivity,
   deleteFile,
+  deleteRoutine,
   listActivities,
   listProjectFiles,
+  listRoutineRuns,
+  listRoutineRunsForRoutine,
+  listRoutines,
   readAgentFile,
   readConfig,
   readProjectFile,
   renameFile,
   resolveAgentDir,
   updateActivity,
+  updateRoutine,
+  updateRoutineRun,
   writeAgentFile,
   writeConfig,
 } from "@houston-ai/engine-core";
@@ -20,9 +28,12 @@ import {
   activityUpdateSchema,
   createFolderBodySchema,
   newActivitySchema,
+  newRoutineSchema,
   projectConfigSchema,
   readAgentFileBodySchema,
   renameFileBodySchema,
+  routineRunUpdateSchema,
+  routineUpdateSchema,
   writeAgentFileBodySchema,
 } from "@houston-ai/engine-protocol";
 import { ApiError } from "../errors.ts";
@@ -120,6 +131,60 @@ export function agentFileRoutes(engine: EngineState): Hono {
     deleteActivity(dir(agentPath), c.req.param("id"));
     engine.events.emit({ type: "ActivityChanged", data: { agent_path: agentPath } });
     return empty();
+  });
+
+  // -- routines (scheduled tasks) --
+  const routinesChanged = (agentPath: string) =>
+    engine.events.emit({ type: "RoutinesChanged", data: { agent_path: agentPath } });
+  const routineRunsChanged = (agentPath: string) =>
+    engine.events.emit({ type: "RoutineRunsChanged", data: { agent_path: agentPath } });
+
+  r.get("/agents/routines", (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    return c.json(listRoutines(dir(agentPath)));
+  });
+  r.post("/agents/routines", async (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    const body = newRoutineSchema.parse(await c.req.json());
+    const routine = createRoutine(dir(agentPath), body);
+    routinesChanged(agentPath);
+    return c.json(routine);
+  });
+  r.patch("/agents/routines/:id", async (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    const body = routineUpdateSchema.parse(await c.req.json());
+    const routine = updateRoutine(dir(agentPath), c.req.param("id"), body);
+    routinesChanged(agentPath);
+    return c.json(routine);
+  });
+  r.delete("/agents/routines/:id", (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    deleteRoutine(dir(agentPath), c.req.param("id"));
+    routinesChanged(agentPath);
+    return empty();
+  });
+
+  // -- routine runs (execution history) --
+  r.get("/agents/routine-runs", (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    const routineId = c.req.query("routine_id");
+    const root = dir(agentPath);
+    return c.json(routineId ? listRoutineRunsForRoutine(root, routineId) : listRoutineRuns(root));
+  });
+  r.post("/agents/routine-runs", async (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    const { routine_id } = (await c.req.json()) as { routine_id?: string };
+    if (!routine_id) throw ApiError.badRequest("routine_id is required");
+    const run = createRoutineRun(dir(agentPath), routine_id);
+    routineRunsChanged(agentPath);
+    return c.json(run);
+  });
+  r.patch("/agents/routine-runs/:id", async (c) => {
+    const agentPath = requireQuery(c.req.query("agent_path"), "agent_path");
+    const body = routineRunUpdateSchema.parse(await c.req.json());
+    const run = updateRoutineRun(dir(agentPath), c.req.param("id"), body);
+    routineRunsChanged(agentPath);
+    return c.json(run);
   });
 
   return r;

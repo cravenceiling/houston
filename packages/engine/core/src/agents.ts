@@ -7,12 +7,12 @@
  * `folderPath` returned is the canonical (symlink-resolved) path, which the
  * desktop store relies on to repoint its file watcher.
  *
- * `create` (which seeds CLAUDE.md, `.agents/skills`, and the prompt scaffold
- * via the prompt module) lands with the session/prompt milestone (M3); listing
- * and metadata mutations are here.
+ * `create` seeds CLAUDE.md, `.agents/skills`, and the prompt scaffold via the
+ * prompt module (see `createAgent` below); listing and metadata mutations follow.
  */
 
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -27,10 +27,14 @@ import {
   writeFileSync,
   readdirSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { randomUUID } from "node:crypto";
+import type { Agent, CreateAgent, CreateAgentResult } from "@houston-ai/engine-protocol";
 import { CoreError } from "./error.ts";
 import { log } from "./log.ts";
 import { readAllWorkspaces } from "./workspaces.ts";
+import { seedAgent } from "./sessions/prompt.ts";
 
 export interface AgentMeta {
   id: string;
@@ -41,15 +45,10 @@ export interface AgentMeta {
   last_opened_at?: string | null;
 }
 
-export interface Agent {
-  id: string;
-  name: string;
-  folderPath: string;
-  configId: string;
-  color: string | null;
-  createdAt: string;
-  lastOpenedAt: string | null;
-}
+// `Agent` is the canonical wire DTO — re-export the protocol type rather than
+// keep a divergent copy. The wire shape omits `color`/`lastOpenedAt` when absent
+// (Rust `skip_serializing_if = "Option::is_none"`), so they are optional, never null.
+export type { Agent } from "@houston-ai/engine-protocol";
 
 function houstonDir(folder: string): string {
   return join(folder, ".houston");
@@ -80,15 +79,16 @@ function metaToAgent(folder: string, meta: AgentMeta): Agent {
   } catch {
     realPath = folder;
   }
-  return {
+  const agent: Agent = {
     id: meta.id,
     name,
     folderPath: realPath,
     configId: meta.config_id,
-    color: meta.color ?? null,
     createdAt: meta.created_at,
-    lastOpenedAt: meta.last_opened_at ?? null,
   };
+  if (meta.color != null) agent.color = meta.color;
+  if (meta.last_opened_at != null) agent.lastOpenedAt = meta.last_opened_at;
+  return agent;
 }
 
 /** Resolve a workspace folder from `(root, workspace_id)`. */
@@ -202,4 +202,126 @@ export function updateAgentColor(
   meta.color = trimmed;
   writeAgentMeta(folder, meta);
   return metaToAgent(folder, meta);
+}
+
+// ---------------------------------------------------------------------------
+// Create — port of `agents_crud.rs::create`
+// ---------------------------------------------------------------------------
+
+/** Default agent role file when the caller supplies none (matches Rust). */
+const DEFAULT_AGENT_CLAUDE_MD = "## Instructions\n\n## Learnings\n";
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+/** Expand a leading `~` to the user's home dir (port of `paths::expand_tilde`). */
+function expandTilde(p: string): string {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) return join(homedir(), p.slice(2));
+  return p;
+}
+
+function tryReadFile(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf-8");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Seed paths that must NOT be written from caller `seeds` (activity is seeded empty separately). */
+function isActivitySeedPath(path: string): boolean {
+  return path === ".houston/activity.json" || path === ".houston/activity/activity.json";
+}
+
+function seedJsonIfMissing(houston: string, filename: string, content: string): void {
+  const path = join(houston, filename);
+  if (!existsSync(path)) writeFileSync(path, content);
+}
+
+/**
+ * Create an agent in a workspace. Port of `houston-engine-core::agents_crud::create`:
+ * scaffold the folder (a real dir, or a symlink to `existingPath` for linked
+ * projects), copy packaged skills from `installedPath`, write `agent.json` +
+ * CLAUDE.md, apply caller `seeds`, lay down the prompt skeleton via `seedAgent`,
+ * and seed empty `activity.json`/`config.json`. Emits no events — matching the
+ * Rust side; the client invalidates on mutation success.
+ */
+export function createAgent(
+  root: string,
+  workspaceId: string,
+  req: CreateAgent,
+): CreateAgentResult {
+  const wsDir = resolveWsFolder(root, workspaceId);
+  const isLinked = req.existingPath !== undefined;
+
+  let folder: string;
+  if (req.existingPath !== undefined) {
+    const target = expandTilde(req.existingPath);
+    if (!existsSync(target)) {
+      throw CoreError.badRequest(`Directory does not exist: ${target}`);
+    }
+    const linkPath = join(wsDir, req.name);
+    if (existsSync(linkPath)) {
+      throw CoreError.conflict(`An agent named "${req.name}" already exists`);
+    }
+    symlinkSync(target, linkPath, "dir");
+    folder = target;
+  } else {
+    folder = join(wsDir, req.name);
+    if (existsSync(folder)) {
+      throw CoreError.conflict(`An agent named "${req.name}" already exists`);
+    }
+    mkdirSync(folder, { recursive: true });
+  }
+
+  mkdirSync(join(folder, ".agents", "skills"), { recursive: true });
+  if (req.installedPath !== undefined) {
+    const packagedSkills = join(req.installedPath, ".agents", "skills");
+    if (existsSync(packagedSkills)) {
+      cpSync(packagedSkills, join(folder, ".agents", "skills"), { recursive: true });
+    }
+  }
+
+  const now = nowIso();
+  const meta: AgentMeta = {
+    id: randomUUID(),
+    name: isLinked ? req.name : null,
+    config_id: req.configId,
+    color: req.color ?? null,
+    created_at: now,
+    last_opened_at: now,
+  };
+  writeAgentMeta(folder, meta);
+
+  const claudeMdPath = join(folder, "CLAUDE.md");
+  if (!existsSync(claudeMdPath)) {
+    const content =
+      req.claudeMd ??
+      (req.installedPath !== undefined
+        ? tryReadFile(join(req.installedPath, "CLAUDE.md"))
+        : undefined) ??
+      DEFAULT_AGENT_CLAUDE_MD;
+    writeFileSync(claudeMdPath, content);
+  }
+
+  if (req.seeds) {
+    for (const [path, content] of Object.entries(req.seeds)) {
+      if (isActivitySeedPath(path)) continue;
+      const target = join(folder, path);
+      if (!existsSync(target)) {
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, content);
+      }
+    }
+  }
+
+  seedAgent(folder);
+
+  const houston = houstonDir(folder);
+  seedJsonIfMissing(houston, "activity.json", "[]");
+  seedJsonIfMissing(houston, "config.json", "{}");
+
+  return { agent: metaToAgent(folder, meta) };
 }

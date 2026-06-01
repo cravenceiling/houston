@@ -30,11 +30,23 @@ import { Event, type ProviderStatus } from "@houston-ai/engine-protocol";
 import type { EventBus } from "../events.ts";
 import { CoreError } from "../error.ts";
 import { log } from "../log.ts";
-import { OAuthStore } from "./oauth-store.ts";
+import { OAuthStore, type StoredOAuth } from "./oauth-store.ts";
 
 /** Houston provider name -> pi OAuth provider id. */
 const OAUTH_ID: Record<string, string> = {
   anthropic: "anthropic",
+  openai: "openai-codex",
+};
+
+/**
+ * pi *model* provider id -> pi OAuth provider id. The session runtime's
+ * `getApiKey` callback receives the resolved model's provider (e.g. an
+ * Anthropic model reports `anthropic`; a Codex-subscription model reports
+ * `openai-codex`), which we map back to the stored-credential key.
+ */
+const PI_TO_OAUTH_ID: Record<string, string> = {
+  anthropic: "anthropic",
+  "openai-codex": "openai-codex",
   openai: "openai-codex",
 };
 
@@ -90,32 +102,44 @@ export class ProviderAuth {
 
   /**
    * API key the session runtime should use for a pi provider, or undefined to
-   * fall back to env keys. pi's Anthropic provider auto-detects oauth tokens
-   * (`sk-ant-oat`) and switches to Bearer + claude-code/oauth beta headers, so
-   * handing it the (auto-refreshed) access token "just works". Codex
-   * subscription chat needs the codex-responses model path, which isn't wired
-   * yet, so we don't feed its token to the standard provider.
+   * fall back to env keys. The callback receives the *pi* provider id of the
+   * resolved model (`anthropic`, `openai-codex`, ...). We refresh the stored
+   * credentials if expired, then hand them to the matching pi OAuth provider's
+   * own `getApiKey`, which produces the exact key form that provider expects
+   * (Anthropic: the `sk-ant-oat` access token it auto-detects into Bearer +
+   * oauth-beta headers; Codex: the ChatGPT-subscription key for the
+   * codex-responses backend). Falls back to undefined → env key when the user
+   * isn't logged in to that provider.
    */
   async oauthApiKeyFor(piProvider: string): Promise<string | undefined> {
-    if (piProvider !== "anthropic") return undefined;
-    return this.refreshedAccessToken("anthropic");
-  }
-
-  private async refreshedAccessToken(houstonName: string): Promise<string | undefined> {
-    const id = OAUTH_ID[houstonName];
-    if (!id) return undefined;
-    const creds = this.store.get(id);
+    const oauthId = PI_TO_OAUTH_ID[piProvider];
+    if (!oauthId) return undefined;
+    const creds = await this.refreshedCreds(oauthId);
     if (!creds) return undefined;
-    if (Date.now() < creds.expires) return creds.access;
-    const provider = getOAuthProvider(id);
+    const provider = getOAuthProvider(oauthId);
     if (!provider) return creds.access;
     try {
-      const refreshed = await provider.refreshToken(creds);
-      this.store.set(id, refreshed);
-      return refreshed.access;
+      return provider.getApiKey(creds);
     } catch (e) {
-      log.warn(`[oauth] token refresh failed for ${houstonName}:`, e);
-      return creds.access; // let the provider reject a truly-dead token
+      log.warn(`[oauth] getApiKey failed for ${piProvider}:`, e);
+      return creds.access; // best-effort: let the provider reject a bad token
+    }
+  }
+
+  /** Refresh stored credentials for a pi OAuth id if expired; persist on success. */
+  private async refreshedCreds(oauthId: string): Promise<StoredOAuth | undefined> {
+    const creds = this.store.get(oauthId);
+    if (!creds) return undefined;
+    if (Date.now() < creds.expires) return creds;
+    const provider = getOAuthProvider(oauthId);
+    if (!provider) return creds;
+    try {
+      const refreshed = await provider.refreshToken(creds);
+      this.store.set(oauthId, refreshed);
+      return refreshed;
+    } catch (e) {
+      log.warn(`[oauth] token refresh failed for ${oauthId}:`, e);
+      return creds; // let the provider reject a truly-dead token
     }
   }
 

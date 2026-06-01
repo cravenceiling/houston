@@ -21,6 +21,9 @@ import { sessionRoutes } from "./routes/sessions.ts";
 import { preferenceRoutes } from "./routes/preferences.ts";
 import { providerRoutes } from "./routes/providers.ts";
 import { claudeRoutes } from "./routes/claude.ts";
+import { watcherRoutes } from "./routes/watcher.ts";
+import { skillRoutes } from "./routes/skills.ts";
+import { routineRoutes } from "./routes/routines.ts";
 
 export function buildApp(engine: EngineState): Hono {
   const app = new Hono();
@@ -56,6 +59,9 @@ export function buildApp(engine: EngineState): Hono {
   app.route("/v1", preferenceRoutes(engine));
   app.route("/v1", providerRoutes(engine));
   app.route("/v1", claudeRoutes());
+  app.route("/v1", watcherRoutes(engine));
+  app.route("/v1", skillRoutes(engine));
+  app.route("/v1", routineRoutes(engine));
 
   return app;
 }

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   type EngineState,
+  createAgent,
   createWorkspace,
   deleteAgent,
   deleteWorkspace,
@@ -11,6 +12,7 @@ import {
   updateAgentColor,
 } from "@houston-ai/engine-core";
 import {
+  createAgentSchema,
   createWorkspaceSchema,
   renameAgentSchema,
   renameWorkspaceSchema,
@@ -21,8 +23,8 @@ import { empty } from "../http.ts";
 /**
  * Workspaces + workspace-scoped agent CRUD. Mirrors
  * `engine/houston-engine-server/src/routes/workspaces.rs`. Agent `create`
- * (which seeds the prompt scaffold) lands with the session/prompt milestone.
- * None of these routes emit events (matching the Rust side).
+ * scaffolds the folder, skills, CLAUDE.md, and prompt skeleton. None of these
+ * routes emit events (matching the Rust side; the client invalidates on success).
  */
 export function workspaceRoutes(engine: EngineState): Hono {
   const root = () => engine.paths.workspacesRoot();
@@ -43,6 +45,10 @@ export function workspaceRoutes(engine: EngineState): Hono {
   });
 
   r.get("/workspaces/:id/agents", (c) => c.json(listAgents(root(), c.req.param("id"))));
+  r.post("/workspaces/:id/agents", async (c) => {
+    const body = createAgentSchema.parse(await c.req.json());
+    return c.json(createAgent(root(), c.req.param("id"), body));
+  });
   r.post("/workspaces/:id/agents/:agentId/rename", async (c) => {
     const body = renameAgentSchema.parse(await c.req.json());
     return c.json(renameAgent(root(), c.req.param("id"), c.req.param("agentId"), body.newName));
