@@ -20,6 +20,12 @@ export interface KanbanBoardProps {
   actions?: (item: KanbanItem) => React.ReactNode
   avatar?: React.ReactNode
   cardLabels?: KanbanCardLabels
+  /** Enable per-card multi-select checkboxes. */
+  selectable?: boolean
+  /** Ids currently in the multi-select set. */
+  selectedIds?: ReadonlySet<string>
+  /** Toggle a card's membership in the multi-select set. */
+  onToggleSelect?: (item: KanbanItem) => void
 }
 
 export function KanbanBoard({
@@ -39,6 +45,9 @@ export function KanbanBoard({
   actions,
   avatar,
   cardLabels,
+  selectable,
+  selectedIds,
+  onToggleSelect,
 }: KanbanBoardProps) {
   const columnData = useMemo(() => {
     return columns.map((col) => {
@@ -72,6 +81,7 @@ export function KanbanBoard({
           highlightedId={highlightedId}
           onAdd={col.onAdd}
           addLabel={col.addLabel}
+          headerAction={col.headerAction}
           onSelect={onSelect ?? (() => {})}
           onDelete={onDelete}
           onApprove={onApprove}
@@ -83,6 +93,9 @@ export function KanbanBoard({
           actions={actions}
           avatar={avatar}
           cardLabels={cardLabels}
+          selectable={selectable}
+          selectedIds={selectedIds}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>

@@ -71,7 +71,9 @@ export function useMissionControl(agents: Agent[]) {
     if (!convos) return [];
     const map: Record<string, string> = {};
     const result = convos
-      .filter((c) => c.type === "activity" && c.status)
+      // Archived missions live in the per-agent Archived tab — keep them off
+      // the cross-agent active board.
+      .filter((c) => c.type === "activity" && c.status && c.status !== "archived")
       .map((c) => {
         map[c.id] = c.agent_path;
         return {

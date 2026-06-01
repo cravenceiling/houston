@@ -39,6 +39,9 @@ import { MissionBoardEmptyState } from "../mission-board-empty-state";
 import { useMissionSearch } from "../use-mission-search";
 import { useAttachmentRejectionDialog } from "../attachment-rejection-dialog";
 import { buildMissionBoardColumns } from "../mission-board-columns";
+import { useBoardSelection } from "../use-board-selection";
+import { ArchiveDoneButton } from "../archive-done-button";
+import { selectActive, BULK_MOVE_TARGETS } from "../../lib/mission-selection";
 import { navigateBoard } from "../../lib/board-navigate";
 import { resolvePendingActivitySelection } from "../../lib/notification-nav";
 
@@ -57,6 +60,7 @@ export default function BoardTab({ agent, agentDef }: TabProps) {
     deleteTooltip: t("board:cardActions.deleteTooltip"),
     deleteTitle: (name: string) => t("board:deleteCard.titleWithName", { name }),
     deleteDescription: t("board:deleteCard.description"),
+    selectTooltip: t("board:cardActions.select"),
   };
   // Mirror Mission Control's columns so the tab and dashboard stay in
   // sync. Without an explicit `columns` prop AIBoard falls back to its
@@ -68,6 +72,9 @@ export default function BoardTab({ agent, agentDef }: TabProps) {
   const { data: rawItems } = useActivity(path);
   const deleteActivity = useDeleteActivity(path);
   const updateActivity = useUpdateActivity(path);
+  // Multi-select + bulk actions (archive/move/delete). Keyed on agent.id so
+  // the selection resets when this reused tab switches agents.
+  const selection = useBoardSelection(path, agent.id);
   const queryClient = useQueryClient();
   const setOnStartMission = useUIStore((s) => s.setOnStartMission);
   const setOnBoardNavigate = useUIStore((s) => s.setOnBoardNavigate);
@@ -100,6 +107,37 @@ export default function BoardTab({ agent, agentDef }: TabProps) {
     if (agentModes?.length) setPendingAgentMode(agentModes[0].id);
     openerRef.current?.({ focusComposer: true });
   }, [agentModes]);
+  // Archived missions live in their own tab — keep them off the active board
+  // (and out of search / arrow-nav / counts).
+  const activeRaw = useMemo(() => selectActive(rawItems ?? []), [rawItems]);
+  const doneIds = useMemo(
+    () =>
+      activeRaw
+        .filter((a) => a.status === "done" || a.status === "cancelled")
+        .map((a) => a.id),
+    [activeRaw],
+  );
+  const handleArchiveDone = useCallback(() => {
+    selection.archiveIds(doneIds).catch((err) =>
+      addToast({ title: t("board:bulk.error", { error: String(err) }), variant: "error" }),
+    );
+  }, [selection, doneIds, addToast, t]);
+  const doneHeaderAction =
+    doneIds.length > 0 ? (
+      <ArchiveDoneButton
+        count={doneIds.length}
+        onConfirm={handleArchiveDone}
+        labels={{
+          tooltip: t("board:doneArchive.tooltip"),
+          confirmTitle: t("board:doneArchive.confirmTitle"),
+          confirmDescription: t("board:doneArchive.confirmDescription", {
+            count: doneIds.length,
+          }),
+          confirmAction: t("board:doneArchive.confirmAction"),
+          cancel: t("board:bulk.cancel"),
+        }}
+      />
+    ) : undefined;
   const boardColumns = buildMissionBoardColumns(
     {
       running: t("dashboard:columns.running"),
@@ -108,10 +146,11 @@ export default function BoardTab({ agent, agentDef }: TabProps) {
       newMission: t("empty.newMission"),
     },
     openDefaultMission,
+    { doneHeaderAction },
   );
 
   const items: KanbanItem[] = useMemo(
-    () => (rawItems ?? []).map((t) => {
+    () => activeRaw.map((t) => {
       const mode = agentModes?.find((m) => m.id === t.agent);
       return {
         id: t.id,
@@ -129,7 +168,7 @@ export default function BoardTab({ agent, agentDef }: TabProps) {
         },
       };
     }),
-    [agent.name, agentModes, rawItems],
+    [agent.name, agentModes, activeRaw],
   );
 
   // Read and consume pending selection from Mission Control
@@ -463,6 +502,70 @@ export default function BoardTab({ agent, agentDef }: TabProps) {
     [updateActivity],
   );
 
+  // Bulk actions surface their failure as a toast (no silent swallow); the
+  // selection clears inside the hook on success.
+  const handleBulkMove = useCallback(
+    async (status: string) => {
+      try {
+        await selection.move(status);
+      } catch (err) {
+        addToast({ title: t("board:bulk.error", { error: String(err) }), variant: "error" });
+      }
+    },
+    [selection, addToast, t],
+  );
+  const handleBulkArchive = useCallback(async () => {
+    try {
+      await selection.archive();
+    } catch (err) {
+      addToast({ title: t("board:bulk.error", { error: String(err) }), variant: "error" });
+    }
+  }, [selection, addToast, t]);
+  const handleBulkDelete = useCallback(async () => {
+    try {
+      await selection.remove();
+    } catch (err) {
+      addToast({ title: t("board:bulk.error", { error: String(err) }), variant: "error" });
+    }
+  }, [selection, addToast, t]);
+
+  const bulkActions = useMemo(
+    () => ({
+      moveTargets: BULK_MOVE_TARGETS.map((status) => ({
+        status,
+        label:
+          status === "done"
+            ? t("dashboard:columns.done")
+            : t("dashboard:columns.needsYou"),
+      })),
+      onMove: handleBulkMove,
+      onArchive: handleBulkArchive,
+      onDelete: handleBulkDelete,
+      onClear: selection.clear,
+      labels: {
+        selected: (count: number) => t("board:bulk.selected", { count }),
+        moveTo: t("board:bulk.moveTo"),
+        archive: t("board:bulk.archive"),
+        delete: t("board:bulk.delete"),
+        clear: t("board:bulk.clear"),
+        cancel: t("board:bulk.cancel"),
+        confirmMoveTitle: t("board:bulk.confirmMove.title"),
+        confirmMoveDescription: (count: number, target: string) =>
+          t("board:bulk.confirmMove.description", { count, target }),
+        confirmMoveAction: t("board:bulk.confirmMove.action"),
+        confirmArchiveTitle: t("board:bulk.confirmArchive.title"),
+        confirmArchiveDescription: (count: number) =>
+          t("board:bulk.confirmArchive.description", { count }),
+        confirmArchiveAction: t("board:bulk.confirmArchive.action"),
+        confirmDeleteTitle: t("board:bulk.confirmDelete.title"),
+        confirmDeleteDescription: (count: number) =>
+          t("board:bulk.confirmDelete.description", { count }),
+        confirmDeleteAction: t("board:bulk.confirmDelete.action"),
+      },
+    }),
+    [t, handleBulkMove, handleBulkArchive, handleBulkDelete, selection.clear],
+  );
+
   const handleCreateConversation = useCallback(
     async (text: string, files: File[]) => {
       const agentMode = pendingAgentMode ?? agentModes?.[0]?.id;
@@ -721,6 +824,10 @@ export default function BoardTab({ agent, agentDef }: TabProps) {
           selectedId={selectedId}
           highlightedId={highlightedId}
           onSelect={setSelectedId}
+          selectable
+          selectedIds={selection.selectedIds}
+          onToggleSelect={selection.toggle}
+          bulkActions={bulkActions}
           panelContainer={panelContainer}
           feedItems={feedItems}
           isLoading={effectiveLoading}

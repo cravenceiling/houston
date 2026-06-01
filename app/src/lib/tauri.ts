@@ -585,6 +585,13 @@ export const tauriActivity = {
   ) => activityData.update(agentPath, activityId, update).then(() => undefined),
   delete: (agentPath: string, activityId: string) =>
     activityData.remove(agentPath, activityId),
+  bulkUpdate: (
+    agentPath: string,
+    ids: string[],
+    update: activityData.ActivityUpdate,
+  ) => activityData.bulkUpdate(agentPath, ids, update),
+  bulkDelete: (agentPath: string, ids: string[]) =>
+    activityData.bulkRemove(agentPath, ids),
 };
 
 // ─── Worktrees & shell ────────────────────────────────────────────────
