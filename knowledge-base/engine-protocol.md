@@ -380,10 +380,27 @@ cost_usd, duration_ms, usage }`. `usage` is the normalized `TokenUsage`
 `houston-terminal-manager::TokenUsage`, TS `@houston-ai/chat` `TokenUsage`)
 or `null` for providers that don't report it (Anthropic + Codex do; Gemini
 doesn't yet). `context_tokens` is the prompt size of the most recent model
-request, i.e. how much of the context window is in use — Anthropic's parser
-sums its three-way split (`input + cache_creation + cache_read`), Codex's
-`input_tokens` is already cache-inclusive so it maps straight through. The
-desktop composer's context-usage indicator (`app/src/components/context-
+request, i.e. how much of the context window is in use.
+
+- **Anthropic:** the parser sums the last assistant message's three-way split
+  (`input + cache_creation + cache_read`). The per-message usage IS the last
+  request, so this is the live fill.
+- **Codex:** trickier. `codex exec --json` only emits `turn.completed.usage`,
+  which is the CUMULATIVE sum of every model request in the turn (a turn with
+  N tool round-trips reports ~N× the real size — this is the
+  94k-instead-of-19k bug). The real last-request fill + the effective window
+  live ONLY in Codex's on-disk rollout
+  (`$CODEX_HOME/sessions/**/rollout-*-<thread_id>.jsonl`, default
+  `~/.codex`), in `token_count.info.last_token_usage` /
+  `model_context_window`. So `engine codex_rollout::latest_usage(thread_id)`
+  reads the newest rollout's last `token_count` and `session_io` patches it
+  onto the `FinalResult` after the stream flushes (codex only writes the
+  rollout fully on exit, so the held-back FinalResult is emitted post-loop).
+  The parser leaves `usage` None; on any rollout failure it stays None (no %
+  beats a wrong %). Bumping the bundled codex won't help — neither 0.130 nor
+  0.135 `exec --json` exposes the per-request data in stdout.
+
+The desktop composer's context-usage indicator (`app/src/components/context-
 indicator.tsx`) divides the latest turn's `context_tokens` by a window
 estimate for a "% full" gauge; it reads usage via `sessionContextUsage`
 (`app/src/lib/context-usage.ts`) so it works both live and after a history
@@ -401,13 +418,15 @@ against Claude Code 2.1.159: `system init` carries only `model`, `tools`,
 - Opus 4.x → 1M automatic on Max/Team/Enterprise, else 200k (1M needs
   `/extra-usage` credits on Pro).
 - Sonnet 4.6 → 200k on every plan; 1M only with usage credits.
-- Codex gpt-5.5 → ~272k enforced input cap (input portion of a 400k split;
-  raw API offers 1M but Codex never serves it).
+- Codex gpt-5.5 → **258,400** effective = raw `context_window` 272k ×
+  `effective_context_window_percent` 95% (both from Codex's `models_cache.json`,
+  and the rollout's `model_context_window` confirms 258400). The opt-in 1M
+  variant maxes at 1M × 95% = 950k.
 
 So the indicator uses a **self-correcting estimate** (`providers.ts`
 `contextWindow` = default assumption, `contextWindowMax` = snap-up ceiling;
 `context-usage.ts` `effectiveContextWindow`): start from the per-model
-default (Opus 1M, Sonnet 200k, gpt-5.5 272k), then snap UP to the ceiling
+default (Opus 1M, Sonnet 200k, gpt-5.5 258.4k), then snap UP to the ceiling
 once the session's observed PEAK `context_tokens` exceeds the default —
 which proves the real window is larger, because both CLIs auto-compact
 before the limit so observed usage can never exceed the true window. This

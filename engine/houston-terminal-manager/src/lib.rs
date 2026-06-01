@@ -10,6 +10,7 @@ mod claude_runner;
 mod cli_process;
 mod codex_command;
 pub mod codex_parser;
+pub mod codex_rollout;
 mod codex_runner;
 pub mod concurrency;
 pub mod gemini_home;

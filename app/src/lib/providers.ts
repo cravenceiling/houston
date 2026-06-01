@@ -98,11 +98,17 @@ export const PROVIDERS: readonly ProviderInfo[] = [
         label: "GPT-5.5",
         description: "OpenAI's frontier model.",
         effortLevels: ["low", "medium", "high", "xhigh"],
-        // Codex CLI's enforced cap is 272k input — the input portion of a
-        // 400k total split (272k input + 128k reserved output). The raw
-        // OpenAI API offers 1M but Codex never serves that. Not plan-laddered
-        // like Claude, so no snap-up ceiling.
-        contextWindow: 272_000,
+        // Codex's EFFECTIVE window = raw context_window (272k) x
+        // effective_context_window_percent (95%) = 258_400. Confirmed in
+        // Codex's own models_cache.json and the rollout's `model_context_window`
+        // — it's the number Codex `/status` shows, so it's what we divide by.
+        // The opt-in 1M gpt-5.5 variant maxes at 1_000_000 x 95% = 950_000, the
+        // snap-up ceiling reached only when observed usage exceeds 258_400
+        // (analogous to Claude's credit-gated 1M). The numerator comes from the
+        // rollout's last_token_usage (see engine `codex_rollout`), not the
+        // cumulative `turn.completed.usage`.
+        contextWindow: 258_400,
+        contextWindowMax: 950_000,
       },
     ],
     defaultModel: "gpt-5.5",

@@ -215,19 +215,51 @@ async fn read_codex_stdout(
     let mut line_count = 0u64;
     let mut item_count = 0u64;
     let mut report = StdoutReadReport::default();
+    // Codex thread id (from `thread.started`) — used to locate the rollout for
+    // accurate context usage once the stream ends.
+    let mut thread_id: Option<String> = None;
+    // The terminal FinalResult is held back until the stream ends: its accurate
+    // context usage lives in the rollout, which codex only fully flushes when
+    // it exits (stdout EOF → this loop breaks). codex exec emits exactly one
+    // turn.completed, so keeping the last one is sufficient.
+    let mut final_result: Option<FeedItem> = None;
     while let Ok(Some(line)) = lines.next_line().await {
         line_count += 1;
         let line_type = line.trim().chars().take(80).collect::<String>();
         tracing::debug!("[houston:stdout:codex] line {line_count}: {line_type}");
 
         if let Some(tid) = codex_parser::extract_thread_id(&line) {
+            thread_id = Some(tid.clone());
             let _ = tx.send(SessionUpdate::SessionId(tid));
         }
-        let items = codex_parser::parse_codex_event(&line, &mut acc);
+        let mut items = codex_parser::parse_codex_event(&line, &mut acc);
         mark_auth_error(&items, &mut report);
         mark_model_unsupported(&items, &mut report);
+        if let Some(pos) = items
+            .iter()
+            .position(|item| matches!(item, FeedItem::FinalResult { .. }))
+        {
+            final_result = Some(items.remove(pos));
+        }
         item_count += log_and_send(&tx, items);
     }
+
+    // Stream ended → codex has exited and flushed its rollout. Patch the held
+    // FinalResult with the accurate last-request usage, then emit it. On any
+    // failure the usage stays None (indicator shows no %, never a wrong summed
+    // number). See `codex_rollout` for why the exec stream alone can't give us
+    // this.
+    if let Some(mut fr) = final_result {
+        if let FeedItem::FinalResult { usage, .. } = &mut fr {
+            if let Some(tid) = thread_id.as_deref() {
+                if let Some(accurate) = crate::codex_rollout::latest_usage(tid).await {
+                    *usage = Some(accurate);
+                }
+            }
+        }
+        item_count += log_and_send(&tx, vec![fr]);
+    }
+
     tracing::debug!(
         "[houston:stdout:codex] stream ended. {line_count} lines, {item_count} feed items"
     );

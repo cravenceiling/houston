@@ -6,7 +6,7 @@
 use super::auth_error::{is_auth_retry_noise, AUTH_RETRY_MARKER};
 use super::provider::Provider;
 use super::provider_error_kind::ProviderError;
-use super::types::{FeedItem, TokenUsage};
+use super::types::FeedItem;
 use serde::Deserialize;
 use std::str::FromStr;
 
@@ -75,21 +75,6 @@ pub struct CodexUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub cached_input_tokens: Option<u64>,
-}
-
-impl CodexUsage {
-    /// Normalize into the shared [`TokenUsage`]. Codex (like the OpenAI API)
-    /// reports `input_tokens` as the cache-INCLUSIVE prompt total, with
-    /// `cached_input_tokens` the cached subset — so the context-window size
-    /// is just `input_tokens`. (Contrast Anthropic, which splits the prompt
-    /// across three fields that must be summed.)
-    fn normalize(&self) -> TokenUsage {
-        TokenUsage {
-            context_tokens: self.input_tokens.unwrap_or(0),
-            output_tokens: self.output_tokens.unwrap_or(0),
-            cached_tokens: self.cached_input_tokens.unwrap_or(0),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -191,11 +176,18 @@ pub fn parse_codex_event(line: &str, acc: &mut CodexAccumulator) -> Vec<FeedItem
             // Emit usage as FinalResult
             if let Some(usage) = &event.usage {
                 let total = usage.input_tokens.unwrap_or(0) + usage.output_tokens.unwrap_or(0);
+                // `turn.completed.usage` is the CUMULATIVE sum of every model
+                // request in the turn, NOT the context-window fill (a turn
+                // with N tool round-trips reports ~N× the real size). Leave
+                // `usage` None here; `session_io::read_codex_stdout` patches in
+                // the accurate last-request usage from the rollout once codex
+                // has exited and flushed it (see `codex_rollout`). The `result`
+                // text keeps the cumulative total for the (non-rendered) record.
                 items.push(FeedItem::FinalResult {
                     result: format!("{total} tokens used"),
                     cost_usd: None,
                     duration_ms: None,
-                    usage: Some(usage.normalize()),
+                    usage: None,
                 });
             }
             items
@@ -592,13 +584,13 @@ mod tests {
         assert_eq!(items.len(), 1);
         match &items[0] {
             FeedItem::FinalResult { result, usage, .. } => {
+                // `result` keeps the cumulative total for the record, but
+                // `usage` is intentionally None: the parser can't get the true
+                // context fill from the cumulative `turn.completed.usage`. The
+                // accurate value is patched in from the rollout by
+                // `session_io::read_codex_stdout` (see codex_rollout).
                 assert!(result.contains("24885"));
-                // Codex `input_tokens` is the cache-inclusive prompt total, so
-                // it maps straight to context_tokens (no summing).
-                let usage = usage.expect("codex turn carries usage");
-                assert_eq!(usage.context_tokens, 24763);
-                assert_eq!(usage.cached_tokens, 24448);
-                assert_eq!(usage.output_tokens, 122);
+                assert!(usage.is_none(), "cumulative turn usage must not be trusted as context fill");
             }
             other => panic!("expected FinalResult, got {other:?}"),
         }
