@@ -55,6 +55,7 @@
     "selected_one": "{{count}} seleccionada",
     "selected_other": "{{count}} seleccionadas",
     "moveTo": "Mover a",
+    "selectAll": "Seleccionar todo",
     "archive": "Archivar",
     "delete": "Eliminar",
     "clear": "Quitar selección",

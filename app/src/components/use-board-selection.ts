@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { KanbanItem } from "@houston-ai/board";
 import { useBulkUpdateActivity, useBulkDeleteActivity } from "../hooks/queries";
-import { ARCHIVED_STATUS } from "../lib/mission-selection";
+import { ARCHIVED_STATUS, toggleAllIds } from "../lib/mission-selection";
 
 /**
  * Per-agent multi-select state + bulk action handlers for the board tab.
@@ -36,6 +36,12 @@ export function useBoardSelection(
 
   const clear = useCallback(() => setSelectedIds(new Set()), []);
 
+  /** Select-all for a section: if every id is already selected, clear them;
+   *  otherwise add them all. */
+  const toggleAll = useCallback((ids: string[]) => {
+    setSelectedIds((prev) => toggleAllIds(prev, ids));
+  }, []);
+
   const move = useCallback(
     async (status: string) => {
       await bulkUpdate.mutateAsync({ ids: Array.from(selectedIds), update: { status } });
@@ -66,5 +72,5 @@ export function useBoardSelection(
     [bulkUpdate],
   );
 
-  return { selectedIds, toggle, clear, move, archive, remove, archiveIds };
+  return { selectedIds, toggle, toggleAll, clear, move, archive, remove, archiveIds };
 }

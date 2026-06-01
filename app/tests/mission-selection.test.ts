@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 import {
   ARCHIVED_STATUS,
   BULK_MOVE_TARGETS,
+  areAllSelected,
   isArchived,
   moveTargetsForSection,
   selectActive,
   selectArchived,
+  toggleAllIds,
 } from "../src/lib/mission-selection.ts";
 import { buildMissionBoardColumns } from "../src/components/mission-board-columns.ts";
 
@@ -43,6 +45,30 @@ describe("mission selection", () => {
     // running isn't a move target, so both stay; null = nothing locked.
     deepStrictEqual(moveTargetsForSection("running"), ["done", "needs_you"]);
     deepStrictEqual(moveTargetsForSection(null), ["done", "needs_you"]);
+  });
+
+  it("computes select-all checkbox state", () => {
+    const ids = ["a", "b", "c"];
+    strictEqual(areAllSelected(ids, new Set(["a", "b", "c"])), true);
+    strictEqual(areAllSelected(ids, new Set(["a", "b"])), false);
+    // Empty id list is never "all selected" (nothing to select).
+    strictEqual(areAllSelected([], new Set(["a"])), false);
+  });
+
+  it("toggles a section as one and never mutates the input", () => {
+    const ids = ["a", "b"];
+    // None/some selected -> add them all.
+    const fromNone = toggleAllIds(new Set<string>(), ids);
+    deepStrictEqual([...fromNone].sort(), ["a", "b"]);
+    const fromSome = toggleAllIds(new Set(["a"]), ids);
+    deepStrictEqual([...fromSome].sort(), ["a", "b"]);
+    // All selected -> clear them, leaving other selections intact.
+    const fromAll = toggleAllIds(new Set(["a", "b", "x"]), ids);
+    deepStrictEqual([...fromAll], ["x"]);
+    // Input set is not mutated.
+    const input = new Set(["a"]);
+    toggleAllIds(input, ids);
+    deepStrictEqual([...input], ["a"]);
   });
 
   it("keeps archived out of every board column", () => {

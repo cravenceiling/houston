@@ -55,6 +55,7 @@
     "selected_one": "{{count}} selected",
     "selected_other": "{{count}} selected",
     "moveTo": "Move to",
+    "selectAll": "Select all",
     "archive": "Archive",
     "delete": "Delete",
     "clear": "Clear selection",

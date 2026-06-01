@@ -27,6 +27,30 @@ export function moveTargetsForSection(
   return BULK_MOVE_TARGETS.filter((status) => status !== sectionColumnId);
 }
 
+/** True when every id in `ids` is selected (and `ids` is non-empty). Drives the
+ *  "select all" checkbox state for a section. */
+export function areAllSelected(
+  ids: string[],
+  selected: ReadonlySet<string>,
+): boolean {
+  return ids.length > 0 && ids.every((id) => selected.has(id));
+}
+
+/** Toggle a group of ids as one: if all are already selected, remove them all;
+ *  otherwise add them all. Returns a new Set (never mutates the input). */
+export function toggleAllIds(
+  selected: ReadonlySet<string>,
+  ids: string[],
+): Set<string> {
+  const next = new Set(selected);
+  const all = areAllSelected(ids, selected);
+  for (const id of ids) {
+    if (all) next.delete(id);
+    else next.add(id);
+  }
+  return next;
+}
+
 export function isArchived<T extends { status: string }>(item: T): boolean {
   return item.status === ARCHIVED_STATUS;
 }

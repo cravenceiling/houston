@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { KanbanColumnConfig } from "@houston-ai/board";
 
 interface MissionBoardColumnLabels {
@@ -8,15 +7,9 @@ interface MissionBoardColumnLabels {
   newMission: string;
 }
 
-interface MissionBoardColumnOptions {
-  /** Node rendered in the Done column header (e.g. an "archive all" button). */
-  doneHeaderAction?: ReactNode;
-}
-
 export function buildMissionBoardColumns(
   labels: MissionBoardColumnLabels,
   onNewMission: () => void,
-  options?: MissionBoardColumnOptions,
 ): KanbanColumnConfig[] {
   return [
     {
@@ -27,11 +20,6 @@ export function buildMissionBoardColumns(
       addLabel: labels.newMission,
     },
     { id: "needs_you", label: labels.needsYou, statuses: ["needs_you", "error"] },
-    {
-      id: "done",
-      label: labels.done,
-      statuses: ["done", "cancelled"],
-      headerAction: options?.doneHeaderAction,
-    },
+    { id: "done", label: labels.done, statuses: ["done", "cancelled"] },
   ];
 }
