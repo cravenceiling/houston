@@ -7,7 +7,6 @@ import type { ChatPanelProps, FeedItem, ToolsAndCardsProps } from "@houston-ai/c
 import { SplitView } from "@houston-ai/layout"
 import { KanbanBoard } from "./kanban-board"
 import { KanbanDetailPanel } from "./kanban-detail-panel"
-import { SessionHydrationCache } from "./session-hydration-cache"
 import type { KanbanCardLabels } from "./kanban-card"
 import type { KanbanItem, KanbanColumn } from "./types"
 
@@ -245,34 +244,23 @@ export function AIBoard({
   const rawSetSelectedId = onSelectProp ?? setInternalSelectedId
 
   // -- History hydration: load persisted chat when a conversation is
-  // selected. The loaded history is handed to the parent via
-  // `onHistoryLoaded` so it lives in the same store as live WS events.
-  // Ai-board stays stateless for feed data — single source of truth =
-  // the parent's `feedItems`.
-  //
-  // The cache only remembers a session once its load actually returned
-  // content. An empty/failed first load stays retryable so the next
-  // selection loads it again — routine-surfaced activities are fed ONLY
-  // by this load (no optimistic message, no live feed after a reload), so
-  // a stranded empty load would otherwise leave them blank until remount.
-  // See `SessionHydrationCache`.
-  const hydration = useRef(new SessionHydrationCache())
+  // selected, once per session. The loaded history is handed to the
+  // parent via `onHistoryLoaded` so it lives in the same store as live
+  // WS events. Ai-board stays stateless for feed data — single source
+  // of truth = the parent's `feedItems`.
+  const hydratedKeys = useRef<Set<string>>(new Set())
 
   const hydrateSession = useCallback(
     (id: string) => {
       if (!onLoadHistory) return
       const sk = sessionKeyFor(id)
-      if (!hydration.current.shouldLoad(sk)) return
-      hydration.current.begin(sk)
+      if (hydratedKeys.current.has(sk)) return
+      hydratedKeys.current.add(sk)
       onLoadHistory(sk)
         .then((h) => {
-          hydration.current.settle(sk, h.length > 0)
           if (h.length > 0) onHistoryLoaded?.(sk, h)
         })
-        .catch((e) => {
-          hydration.current.settle(sk, false)
-          console.error(e)
-        })
+        .catch(console.error)
     },
     [onLoadHistory, onHistoryLoaded, sessionKeyFor],
   )

@@ -19,7 +19,6 @@
     "lucide-react": "^0.577.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/*.test.mjs"
+    "typecheck": "tsc --noEmit"
   }
 }
