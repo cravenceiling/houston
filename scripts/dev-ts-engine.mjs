@@ -4,16 +4,19 @@
  * Why this exists: `pnpm tauri dev` resolves the engine binary as
  * `HOUSTON_ENGINE_BIN` -> `target/debug/houston-engine` (Rust) -> staged
  * sidecar. If the env var doesn't reach the Tauri-spawned process you SILENTLY
- * get the Rust engine. This script (1) rebuilds the TS engine exe, (2) sets
- * `HOUSTON_ENGINE_BIN` to it in the child env (so it always wins), and (3)
- * launches `tauri dev`. Run via `pnpm dev:ts-engine`.
+ * get the Rust engine. This script (1) rebuilds the TS engine exe, (2) stages a
+ * copy at `target/debug/houston-engine[.exe]` so the app's `build.rs` sidecar
+ * staging (which only scans `target/{debug,release}` and feeds tauri's required
+ * `externalBin`) succeeds even when the Rust engine was never built, (3) sets
+ * `HOUSTON_ENGINE_BIN` to it in the child env (so it always wins at runtime),
+ * and (4) launches `tauri dev`. Run via `pnpm dev:ts-engine`.
  *
  * The Rust supervisor prints a loud "HOUSTON ENGINE" banner on boot (binary
  * path + version + port) so you can always confirm which engine you got
  * (TS engine version = 0.1.x; Rust engine = crate version e.g. 0.4.15).
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +40,16 @@ if (build.status !== 0 || !existsSync(exe)) {
   process.stderr.write("\n\x1b[1;31mTS engine build failed.\x1b[0m\n");
   process.exit(build.status ?? 1);
 }
+
+// Stage the compiled TS exe where the app's build.rs expects the engine
+// sidecar (`target/debug/houston-engine[.exe]`, the unconditional fallback
+// candidate it scans). Without this, a fresh checkout with no Rust engine
+// fails the build at tauri's required `externalBin` ("...doesn't exist").
+// Runtime still runs this exact binary via HOUSTON_ENGINE_BIN below.
+const staged = join(repo, "target", "debug", exeName);
+mkdirSync(join(repo, "target", "debug"), { recursive: true });
+copyFileSync(exe, staged);
+banner(`Staged sidecar for build.rs\n    ${staged}`);
 
 banner(`Launching desktop app -> TS engine\n    ${exe}`);
 const dev = spawnSync("pnpm", ["--dir", "app", "tauri", "dev"], {
