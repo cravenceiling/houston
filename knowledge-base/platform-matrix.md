@@ -20,8 +20,13 @@ both.
 
 ## Cross-platform primitives — in use
 
-- **Home dir**: `dirs::home_dir()` (HOME on Unix, USERPROFILE on
-  Windows). `std::env::var("HOME")` is banned in engine code.
+- **Home dir**: `dirs::home_dir()` (HOME on Unix; on Windows `dirs 5`
+  resolves via the known-folder API and ignores `USERPROFILE`).
+  `std::env::var("HOME")` is banned in engine code.
+  `houston-composio::install::home_dir` checks `USERPROFILE` first on
+  Windows so callers and tests can redirect `~/.composio` resolution
+  (it equals the known-folder profile in normal use, so production
+  behavior is unchanged).
 - **PATH manipulation**: `std::env::split_paths` / `std::env::join_paths`
   — never hand-roll the separator.
 - **Symlinks**: `std::os::unix::fs::symlink` on Unix,
@@ -30,10 +35,12 @@ both.
   `skills.rs`. Windows symlink creation needs Developer Mode or
   admin; stock installs fail with os error 1314 ("A required
   privilege is not held by the client"). Call sites that expose
-  agent-role content to a sibling CLI (AGENTS.md/GEMINI.md in
-  `agents/prompt.rs` and `houston-agent-files::migrate_agent_data`)
-  fall back to `fs::copy` so non-admin Windows users still see the
-  role file. The gemini runtime-home staging
+  content to a sibling CLI fall back to `fs::copy` so non-admin
+  Windows users still get it: AGENTS.md/GEMINI.md in
+  `agents/prompt.rs` and `houston-agent-files::migrate_agent_data`,
+  and the `.claude/skills/<name>` discovery mirror in `skills.rs`
+  (copies the whole skill dir when `symlink_dir` is denied, and
+  re-copies on `save` so edits don't go stale). The gemini runtime-home staging
   (`houston-terminal-manager::gemini_home::ensure_symlink`) also
   tolerates a missing source on the copy fallback so first-time
   gemini users without `~/.gemini/.env` or OAuth files do not hit
@@ -63,6 +70,7 @@ both.
 | Area | File | Unix | Windows |
 |------|------|------|---------|
 | Session cancel | `engine-core/src/sessions/mod.rs::cancel` | `kill -TERM <pid>` | `taskkill /PID <pid> /T /F` |
+| Worktree shell (`run_shell`) | `engine-core/src/worktree.rs::run_shell` | `sh -c <command>` | `cmd /C <command>` (no `sh` on Windows) |
 | `engine.json` perms | `engine-server/src/main.rs::write_manifest` | `chmod 0o600` | inherits NTFS ACL from parent (sufficient; user dir is per-user) |
 | Composio installer | `houston-composio/src/install.rs::install` | `bash -c "curl \| bash"` | returns a clear error — auto-install not wired (see **gaps** below) |
 | Composio executable check | `houston-composio/src/install.rs::is_installed` | file + `+x` bit | file existence only (NTFS has no POSIX +x; Composio installer drops `composio.exe`) |

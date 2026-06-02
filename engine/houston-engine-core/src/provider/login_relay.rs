@@ -502,6 +502,47 @@ mod tests {
     use super::*;
     use crate::provider::parse;
 
+    /// A child that blocks without writing stdout, standing in for a provider
+    /// CLI waiting on the user. Cross-platform: `cat` (Unix) and `findstr`
+    /// (Windows, always in System32) both block reading the piped stdin we hold
+    /// open; neither writes stdout while no input arrives (these tests never
+    /// write the child's stdin). Replaces a Unix-only `sleep 60`, which fails
+    /// with "program not found" on Windows.
+    fn idle_child_command() -> tokio::process::Command {
+        #[cfg(windows)]
+        {
+            let mut c = tokio::process::Command::new("findstr");
+            c.arg("HoustonIdleNoMatch");
+            c
+        }
+        #[cfg(not(windows))]
+        {
+            tokio::process::Command::new("cat")
+        }
+    }
+
+    /// A child that emits the bytes of `file_name` (resolved in `dir`) verbatim
+    /// then exits: `cat` (Unix) / `cmd /C type` (Windows). Routing the canned
+    /// output through a file preserves the SGR/ESC bytes and newlines a portable
+    /// `echo` cannot emit, and a bare filename with `cwd = dir` sidesteps path
+    /// quoting. Replaces a Unix-only `printf`.
+    fn emit_file_command(dir: &std::path::Path, file_name: &str) -> tokio::process::Command {
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut c = tokio::process::Command::new("cmd");
+            c.args(["/C", "type", file_name]);
+            c
+        };
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut c = tokio::process::Command::new("cat");
+            c.arg(file_name);
+            c
+        };
+        cmd.current_dir(dir);
+        cmd
+    }
+
     #[test]
     fn extract_url_from_claude_oauth_line() {
         let line = "If the browser didn't open, visit: \
@@ -634,17 +675,16 @@ mod tests {
 
     #[tokio::test]
     async fn insert_session_rejects_duplicate() {
-        // Spawn a long-running subprocess to grab a real ChildStdin —
-        // `sleep` blocks until killed, so its stdin handle stays alive
-        // long enough for both insert attempts.
+        // Spawn a long-running subprocess to grab a real ChildStdin. The idle
+        // child blocks until killed, so its stdin handle stays alive long
+        // enough for both insert attempts.
         async fn make_stdin() -> ChildStdin {
-            let mut cmd = tokio::process::Command::new("sleep");
-            cmd.arg("60")
-                .stdin(std::process::Stdio::piped())
+            let mut cmd = idle_child_command();
+            cmd.stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .kill_on_drop(true);
-            let mut child = cmd.spawn().expect("spawn sleep");
+            let mut child = cmd.spawn().expect("spawn idle child");
             child.stdin.take().expect("stdin piped")
         }
         // Use a unique provider id so this test doesn't collide with
@@ -665,17 +705,16 @@ mod tests {
         LOGIN_SESSIONS.lock().await.remove(provider_id);
     }
 
-    /// Spawn a long-lived child with piped stdio so the relay has a
-    /// real subprocess to kill. `sleep 60` never writes stdout, so the
-    /// relay only ever emits on cancel/exit — no spurious URL event.
+    /// Spawn a long-lived child with piped stdio so the relay has a real
+    /// subprocess to kill. The idle child never writes stdout, so the relay
+    /// only ever emits on cancel/exit, with no spurious URL event.
     async fn spawn_idle_child() -> Child {
-        let mut cmd = tokio::process::Command::new("sleep");
-        cmd.arg("60")
-            .stdin(std::process::Stdio::piped())
+        let mut cmd = idle_child_command();
+        cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
-        cmd.spawn().expect("spawn sleep")
+        cmd.spawn().expect("spawn idle child")
     }
 
     #[tokio::test]
@@ -754,29 +793,37 @@ mod tests {
     async fn device_auth_relay_emits_url_then_code() {
         use houston_ui_events::BroadcastEventSink;
 
-        // Stand-in for `codex login --device-auth`: `printf` emits the
-        // verbatim multi-line output (prose, the verification URL, then the
-        // one-time code on its own line) and exits. The relay should surface
-        // the URL the moment it streams, then re-emit with the code.
+        // Stand-in for `codex login --device-auth`: emit the verbatim
+        // multi-line output (prose, the verification URL, then the one-time
+        // code on its own line) and exit. The relay should surface the URL the
+        // moment it streams, then re-emit with the code.
         //
         // The URL and code lines carry the SGR colour wrappers codex prints
-        // even over a pipe (`\x1b[94m…\x1b[0m`) — the exact byte shape
-        // captured from codex 0.133. This is the regression case: the
-        // opening `\x1b[94m` ends in `m`, flush against the code, so the
-        // relay MUST strip ANSI before matching or the second emit (the
-        // code) never fires and the dialog falls back to paste-back.
-        let mut cmd = tokio::process::Command::new("printf");
-        cmd.arg("%s\\n")
-            .arg("Follow these steps to sign in with ChatGPT using device code authorization:")
-            .arg("1. Open this link in your browser and sign in to your account")
-            .arg("   \u{1b}[94mhttps://auth.openai.com/codex/device\u{1b}[0m")
-            .arg("2. Enter this one-time code \u{1b}[90m(expires in 15 minutes)\u{1b}[0m")
-            .arg("   \u{1b}[94mABCD-EFGHI\u{1b}[0m")
-            .stdin(std::process::Stdio::piped())
+        // even over a pipe (`\x1b[94m...\x1b[0m`), the exact byte shape captured
+        // from codex 0.133. This is the regression case: the opening `\x1b[94m`
+        // ends in `m`, flush against the code, so the relay MUST strip ANSI
+        // before matching or the second emit (the code) never fires and the
+        // dialog falls back to paste-back. Route the bytes through a file read
+        // by `cat`/`type` (not Unix-only `printf`) so ESC survives everywhere.
+        let dir = tempfile::TempDir::new().unwrap();
+        let canned = format!(
+            "{}\n",
+            [
+                "Follow these steps to sign in with ChatGPT using device code authorization:",
+                "1. Open this link in your browser and sign in to your account",
+                "   \u{1b}[94mhttps://auth.openai.com/codex/device\u{1b}[0m",
+                "2. Enter this one-time code \u{1b}[90m(expires in 15 minutes)\u{1b}[0m",
+                "   \u{1b}[94mABCD-EFGHI\u{1b}[0m",
+            ]
+            .join("\n")
+        );
+        std::fs::write(dir.path().join("device.txt"), canned).unwrap();
+        let mut cmd = emit_file_command(dir.path(), "device.txt");
+        cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
-        let mut child = cmd.spawn().expect("spawn printf");
+        let mut child = cmd.spawn().expect("spawn device-auth stand-in");
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");
         let stderr = child.stderr.take();
