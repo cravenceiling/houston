@@ -67,6 +67,7 @@ import {
 } from "./composio-signin-card";
 import { ChatModelSelector } from "./chat-model-selector";
 import { ChatEffortSelector } from "./chat-effort-selector";
+import { ContextCompactedDivider } from "./context-compacted-divider";
 import {
   getContextWindowConfig,
   getDefaultModel,
@@ -514,6 +515,7 @@ export function useAgentChatPanel({
   );
   const renderSystemMessage = useCallback(
     (msg: ChatMessage) => {
+      if (msg.compaction) return <ContextCompactedDivider />;
       if (isToolRuntimeErrorMessage(msg)) {
         const isModelUnsupported =
           msg.runtimeError.kind === "provider_model_unsupported";

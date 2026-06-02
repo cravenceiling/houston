@@ -55,3 +55,36 @@ export function effectiveContextWindow(
   const estimate = peakContextTokens > cfg.default ? cfg.max : cfg.default;
   return Math.max(estimate, peakContextTokens);
 }
+
+/**
+ * How full the context window is, 0-100, or `null` when usage or the window
+ * isn't known. Rounded and clamped so the displayed gauge and the autocompact
+ * trigger agree on the same number. Shared by `ContextIndicator` (display) and
+ * `shouldAutocompactForSession` (the trigger decision).
+ */
+export function contextFillPercent(
+  usage: TokenUsage | null,
+  windowTokens: number | null | undefined,
+): number | null {
+  if (!usage || windowTokens == null || windowTokens <= 0) return null;
+  return Math.min(
+    100,
+    Math.max(0, Math.round((usage.context_tokens / windowTokens) * 100)),
+  );
+}
+
+/**
+ * Whether to proactively compact this turn: autocompact is enabled and the
+ * context is at/over the user's threshold. `percent` null (unknown usage or
+ * window) means we can't tell, so we don't compact. Self-limiting: after a
+ * compaction the next turn's fill is small, so this won't re-fire until the
+ * window fills again.
+ */
+export function shouldAutocompact(opts: {
+  percent: number | null;
+  enabled: boolean;
+  threshold: number;
+}): boolean {
+  if (!opts.enabled || opts.percent == null) return false;
+  return opts.percent >= opts.threshold;
+}
