@@ -1,7 +1,12 @@
 /**
- * Picker fields used by ScheduleBuilder — time, day-of-week, day-of-month.
+ * Picker fields used by ScheduleBuilder — time, day-of-week, day-of-month,
+ * and the friendly "every N minutes/hours/days" interval picker.
  */
 import { cn } from "@houston-ai/core"
+import type { ScheduleInterval, IntervalUnit } from "./schedule-interval-utils"
+import { INTERVAL_UNIT_LABELS } from "./schedule-interval-utils"
+
+const INTERVAL_UNITS: IntervalUnit[] = ["minutes", "hours", "days"]
 
 const inputClass = cn(
   "px-3 py-2 rounded-lg border border-border/20 bg-background",
@@ -89,6 +94,53 @@ export function DayOfMonthPicker({
         onChange={(e) => onChange(Number(e.target.value))}
         className={cn(inputClass, "w-24")}
       />
+    </div>
+  )
+}
+
+/**
+ * Friendly "Every [N] [minutes/hours/days]" picker — the non-technical
+ * replacement for typing a raw cron expression. Emits a structured interval;
+ * the builder turns it into cron.
+ */
+export function IntervalPicker({
+  value,
+  onChange,
+}: {
+  value: ScheduleInterval
+  onChange: (interval: ScheduleInterval) => void
+}) {
+  return (
+    <div>
+      <label className={labelClass}>Run every</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          max={999}
+          value={value.every}
+          onChange={(e) =>
+            onChange({ ...value, every: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className={cn(inputClass, "w-20")}
+        />
+        <div className="flex gap-1">
+          {INTERVAL_UNITS.map((unit) => (
+            <button
+              key={unit}
+              onClick={() => onChange({ ...value, unit })}
+              className={cn(
+                "h-8 px-3 rounded-lg text-xs font-medium transition-colors capitalize",
+                value.unit === unit
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background border border-border/20 text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {INTERVAL_UNIT_LABELS[unit]}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
