@@ -81,7 +81,7 @@ export function useMissionControlSource(agents: Agent[]): BoardSource {
     ? (mc.loading[selectedSessionKey] ?? false)
     : false;
 
-  const actions = useMcActions({ mc, activeAgent, activeAgentDef });
+  const actions = useMcActions({ mc, activeAgent, activeAgentDef, paths });
 
   const agentPathForId = useCallback(
     (id: string) => mc.items.find((i) => i.id === id)?.metadata?.agentPath as string | undefined,
@@ -151,6 +151,8 @@ export function useMissionControlSource(agents: Agent[]): BoardSource {
     createConversation: actions.createConversation,
     stopSession: actions.stopSession,
     onRunInTerminal: actions.runInTerminal,
+    onItemMove: actions.handleItemMove,
+    canDropItem: actions.canDropItem,
     selection,
     registerOpener: newMission.registerOpener,
     openerReady: newMission.openerReady,

@@ -297,7 +297,7 @@ Users cannot edit the product prompt — it's compiled into the app binary. Per-
 The per-agent board tab AND cross-agent Mission Control render **one** component, `<MissionBoard source={…}>`, which owns every shared concern: columns, multi-select UI, `useAgentChatPanel`, the message queue, draft persistence, keyboard nav, run-in-terminal actions, and the full AIBoard prop spread. The divergent bits live behind a `BoardSource` (headless-logic pattern):
 
 - `useAgentBoardSource(agent, agentDef)` → single-agent data + per-agent bulk + default-mode "New mission" + DnD. Consumed by the thin `tabs/board-tab.tsx`.
-- `useMissionControlSource(agents)` → cross-agent data (`useMissionControl`) + cross-agent bulk (`useCrossAgentSelection`, groups bulk ops by owning agent) + an agent-picker "New mission" + the filter/search toolbar. Consumed by the thin `dashboard.tsx`. **No DnD** (Mission Control omits `onItemMove`).
+- `useMissionControlSource(agents)` → cross-agent data (`useMissionControl`) + cross-agent bulk (`useCrossAgentSelection`, groups bulk ops by owning agent) + cross-agent drag-and-drop (a dragged card moves within its own agent; `useMcActions.handleItemMove` routes the status change to that card's agent path) + an agent-picker "New mission" + the filter/search toolbar. Consumed by the thin `dashboard.tsx`.
 
 Adding a board capability = add it to `<MissionBoard>` (both views get it) or to one `BoardSource` (just that view). `archived-tab.tsx` still renders `AIBoard` directly (list layout) and shares the same primitives.
 

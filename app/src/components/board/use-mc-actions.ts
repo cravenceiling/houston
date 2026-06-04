@@ -1,10 +1,14 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import type { KanbanItem } from "@houston-ai/board";
 import { useUIStore } from "../../stores/ui";
-import { tauriChat } from "../../lib/tauri";
+import { tauriActivity, tauriChat } from "../../lib/tauri";
 import { openMissionWorktreeTerminal } from "../../lib/mission-worktree";
+import { queryKeys } from "../../lib/query-keys";
+import { canDropMission } from "../../lib/mission-selection";
 import { planNewMission } from "../mission-control-create";
+import { missionColumnIdForStatus } from "../mission-board-columns";
 import {
   missionControlAgentPathForSession,
   missionControlSessionKeyForId,
@@ -24,13 +28,17 @@ export function useMcActions({
   mc,
   activeAgent,
   activeAgentDef,
+  paths,
 }: {
   mc: ReturnType<typeof useMissionControl>;
   activeAgent: Agent | null;
   activeAgentDef: AgentDefinition | null;
+  /** Every agent path on the view, for query invalidation after a drag-move. */
+  paths: string[];
 }) {
   const { t } = useTranslation(["dashboard", "board"]);
   const addToast = useUIStore((s) => s.addToast);
+  const qc = useQueryClient();
 
   const createConversation = useCallback(
     async ({
@@ -95,5 +103,41 @@ export function useMcActions({
     [mc.items],
   );
 
-  return { createConversation, sendMessageNow, stopSession, runInTerminal, sessionKeyFor };
+  // Drag a card onto another column to change its status. The dragged card
+  // stays with its own agent — only its status moves — so this routes the
+  // update to that card's agent path and refreshes both the cross-agent board
+  // and that agent's own board (matching the cross-agent bulk move). The board
+  // only fires this for a column `canDropItem` accepted, so `toColumnId`
+  // doubles as the new status. Failure surfaces as a toast.
+  const handleItemMove = useCallback(
+    async (item: KanbanItem, toColumnId: string) => {
+      const agentPath = item.metadata?.agentPath as string | undefined;
+      if (!agentPath) return;
+      try {
+        await tauriActivity.update(agentPath, item.id, { status: toColumnId });
+        qc.invalidateQueries({ queryKey: queryKeys.allConversations(paths) });
+        qc.invalidateQueries({ queryKey: queryKeys.activity(agentPath) });
+      } catch (err) {
+        addToast({ title: t("board:dnd.moveError", { error: String(err) }), variant: "error" });
+      }
+    },
+    [qc, paths, addToast, t],
+  );
+  // A card can be dropped on a column iff the shared mission rule allows it:
+  // only needs_you / done, and never its current section. Agent-agnostic.
+  const canDropItem = useCallback(
+    (item: KanbanItem, toColumnId: string) =>
+      canDropMission(missionColumnIdForStatus(item.status), toColumnId),
+    [],
+  );
+
+  return {
+    createConversation,
+    sendMessageNow,
+    stopSession,
+    runInTerminal,
+    sessionKeyFor,
+    handleItemMove,
+    canDropItem,
+  };
 }
