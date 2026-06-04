@@ -1,10 +1,6 @@
 import { strict as assert } from "node:assert"
 import { describe, it } from "node:test"
-import {
-  BOARD_CARD_DRAG_TYPE,
-  columnDragRole,
-  defaultCanDropItem,
-} from "../src/dnd.ts"
+import { columnDragRole, defaultCanDropItem } from "../src/dnd.ts"
 import type { KanbanColumn, KanbanItem } from "../src/types.ts"
 
 const item = (status: string): KanbanItem => ({
@@ -67,11 +63,5 @@ describe("columnDragRole", () => {
   it("treats origin before eligibility (origin can never be forbidden)", () => {
     // Even if a buggy canDrop said true, the card's own section stays origin.
     assert.equal(columnDragRole(item("done"), done, true), "origin")
-  })
-})
-
-describe("BOARD_CARD_DRAG_TYPE", () => {
-  it("is a stable, namespaced MIME type", () => {
-    assert.equal(BOARD_CARD_DRAG_TYPE, "application/x-houston-kanban-card")
   })
 })

@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState } from "react"
-import { cn } from "@houston-ai/core"
+import { useCallback, useMemo } from "react"
 import { KanbanColumn } from "./kanban-column"
 import type { KanbanCardLabels } from "./kanban-card"
 import type { KanbanItem, KanbanColumn as KanbanColumnType } from "./types"
 import { columnDragRole, defaultCanDropItem } from "./dnd"
+import { useBoardDrag } from "./use-board-drag"
 
 export interface KanbanBoardProps {
   columns: KanbanColumnType[]
@@ -66,11 +66,6 @@ export function KanbanBoard({
   canDropItem,
 }: KanbanBoardProps) {
   const dndEnabled = !!onItemMove
-  // The card currently being dragged (null when idle). Held here so every
-  // column can tell — during dragover, before the drop fires — whether it's a
-  // valid target for this card and render the affordance accordingly.
-  const [draggingItem, setDraggingItem] = useState<KanbanItem | null>(null)
-  const handleCardDragEnd = useCallback(() => setDraggingItem(null), [])
   const resolveCanDrop = useCallback(
     (item: KanbanItem, columnId: string) => {
       if (canDropItem) return canDropItem(item, columnId)
@@ -79,6 +74,21 @@ export function KanbanBoard({
     },
     [canDropItem, columns],
   )
+
+  // Custom pointer-events drag (no native HTML5 DnD) so the cursor is the same
+  // on every OS. Suppressed while a multi-select is active — the bulk action
+  // bar owns moves then. The card currently being dragged is `draggingId`;
+  // every column derives its drop affordance from it via `columnDragRole`.
+  const { draggingId, hoverColumnId, dragHandlers } = useBoardDrag({
+    items,
+    columns,
+    enabled: dndEnabled && (selectedIds?.size ?? 0) === 0,
+    canDrop: resolveCanDrop,
+    onItemMove,
+  })
+  const draggingItem = draggingId
+    ? (items.find((i) => i.id === draggingId) ?? null)
+    : null
 
   const columnData = useMemo(() => {
     return columns.map((col) => {
@@ -102,34 +112,23 @@ export function KanbanBoard({
   }
 
   return (
-    <div
-      className={cn(
-        "flex-1 flex gap-3 p-3 min-h-0 overflow-hidden",
-        // Best-effort grab "hand" for the whole drag. The browser owns the
-        // cursor during a native HTML5 drag (move vs not-allowed, by
-        // drop-effect) and ignores CSS on Chromium; WebKit honours this, so we
-        // set it where it lands. The forbidden (running) column overrides it
-        // back to not-allowed for its own subtree.
-        draggingItem != null && "cursor-grabbing",
-      )}
-    >
+    // The drag is delegated: handlers live on the container and resolve the
+    // dragged card / target column from the DOM (data attributes). The cursor
+    // itself is driven by `body` classes (see use-board-drag), not here.
+    <div {...dragHandlers} className="flex-1 flex gap-3 p-3 min-h-0 overflow-hidden">
       {columnData.map((col) => {
-        // `idle | origin | drop-target | forbidden` — see `columnDragRole`.
-        // Origin (the card's current section) accepts the drag-over so its
-        // cursor reads as a move, even though the drop is a no-op.
-        const role =
-          dndEnabled && draggingItem != null
-            ? columnDragRole(
-                draggingItem,
-                col,
-                resolveCanDrop(draggingItem, col.id),
-              )
-            : "idle"
+        // `idle | origin | drop-target | forbidden` — see `columnDragRole`. A
+        // drop target shows the faint "drop here" ring; the column under the
+        // pointer (`hoverColumnId`) gets the stronger highlight.
+        const role = draggingItem
+          ? columnDragRole(draggingItem, col, resolveCanDrop(draggingItem, col.id))
+          : "idle"
         const isDropTarget = role === "drop-target"
-        const allowDragOver = isDropTarget || role === "origin"
+        const isOver = isDropTarget && hoverColumnId === col.id
         return (
           <KanbanColumn
             key={col.id}
+            columnId={col.id}
             label={col.label}
             items={col.items}
             selectedId={selectedId}
@@ -156,13 +155,8 @@ export function KanbanBoard({
             onToggleSelect={onToggleSelect}
             dndEnabled={dndEnabled}
             isDropTarget={isDropTarget}
-            allowDragOver={allowDragOver}
-            dragActive={draggingItem != null}
-            onCardDragStart={setDraggingItem}
-            onCardDragEnd={handleCardDragEnd}
-            onCardDrop={() => {
-              if (draggingItem) onItemMove?.(draggingItem, col.id)
-            }}
+            isOver={isOver}
+            draggingId={draggingId}
           />
         )
       })}

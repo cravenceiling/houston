@@ -3,9 +3,11 @@ import { Plus } from "lucide-react"
 import { cn } from "@houston-ai/core"
 import type { KanbanItem } from "./types"
 import { KanbanCard, type KanbanCardLabels } from "./kanban-card"
-import { useColumnDropTarget } from "./use-column-drop-target"
 
 export interface KanbanColumnProps {
+  /** This column's id. Exposed on the DOM (`data-kanban-column`) so the board's
+   *  pointer drag can hit-test which column a card is dropped on. */
+  columnId?: string
   label: string
   items: KanbanItem[]
   selectedId?: string | null
@@ -33,24 +35,15 @@ export interface KanbanColumnProps {
   onToggleSelect?: (item: KanbanItem) => void
   /** Make this column's cards draggable. */
   dndEnabled?: boolean
-  /** Whether this column accepts the card currently being dragged. When true
-   *  the column shows a drop affordance and handles the drop; when false it
-   *  ignores the drag entirely. */
+  /** Whether this column accepts the card currently being dragged. Drives the
+   *  faint "drop here" ring during a drag. */
   isDropTarget?: boolean
-  /** Whether this column should accept the drag-over without being a real drop
-   *  target (true for `isDropTarget` columns AND the dragged card's own
-   *  section). When true but not a drop target, the cursor reads as a move
-   *  rather than the browser's forbidden marker, and the drop is a no-op. */
-  allowDragOver?: boolean
-  /** Whether any card on the board is currently being dragged. Drives the
-   *  cursor: a forbidden column (e.g. running) shows `not-allowed`. */
-  dragActive?: boolean
-  /** A card in this column started being dragged. */
-  onCardDragStart?: (item: KanbanItem) => void
-  /** The active drag ended (drop or cancel). */
-  onCardDragEnd?: () => void
-  /** A card was dropped on this column (only fires when `isDropTarget`). */
-  onCardDrop?: () => void
+  /** Whether the dragged card is currently over this (drop-target) column.
+   *  Drives the stronger highlight. */
+  isOver?: boolean
+  /** Id of the card being dragged anywhere on the board (null when idle), used
+   *  to dim the dragged card. */
+  draggingId?: string | null
 }
 
 export function KanbanColumn({
@@ -77,25 +70,16 @@ export function KanbanColumn({
   onToggleSelect,
   dndEnabled,
   isDropTarget = false,
-  allowDragOver = isDropTarget,
-  dragActive = false,
-  onCardDragStart,
-  onCardDragEnd,
-  onCardDrop,
+  isOver = false,
+  draggingId = null,
+  columnId,
 }: KanbanColumnProps) {
   const anySelected = (selectedIds?.size ?? 0) > 0
-  const { isOver, dragHandlers } = useColumnDropTarget(
-    isDropTarget,
-    () => onCardDrop?.(),
-    allowDragOver,
-  )
-  // A drag is in flight but this column refuses it (e.g. the running section):
-  // keep the browser's forbidden cursor and reinforce it for the CSS layer.
-  const isForbidden = dragActive && !allowDragOver
 
   return (
     <div
-      {...dragHandlers}
+      // Name must match board-drag-dom's COLUMN_ID_ATTR (drop hit-testing).
+      data-kanban-column={columnId}
       className={cn(
         "min-w-[180px] flex-1 flex flex-col h-full min-h-0 rounded-xl bg-secondary transition-[box-shadow,background-color] duration-150",
         // Valid drop target during a drag: a faint inset ring hints "drop here".
@@ -104,10 +88,6 @@ export function KanbanColumn({
           (isOver
             ? "ring-2 ring-inset ring-primary/40 bg-accent"
             : "ring-1 ring-inset ring-primary/15"),
-        // The forbidden section keeps the not-allowed cursor over its whole
-        // subtree (overriding the board's best-effort grab). Drop targets and
-        // the origin section inherit the board's grab cursor.
-        isForbidden && "cursor-not-allowed",
       )}
     >
       {/* Column header */}
@@ -164,11 +144,7 @@ export function KanbanColumn({
                     onToggleSelect ? () => onToggleSelect(item) : undefined
                   }
                   enableDrag={dndEnabled}
-                  dragActive={dragActive}
-                  onDragStart={
-                    onCardDragStart ? () => onCardDragStart(item) : undefined
-                  }
-                  onDragEnd={onCardDragEnd}
+                  dragging={draggingId === item.id}
                 />
               )}
             </motion.div>
