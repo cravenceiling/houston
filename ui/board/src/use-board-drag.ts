@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { columnDragRole } from "./dnd"
 import {
+  cardIdOf,
   columnIdAt,
-  draggableCardIdAt,
+  createDragGhost,
+  draggableCardAt,
   endDragCursor,
+  moveDragGhost,
+  removeDragGhost,
   setDragForbidden,
   startDragCursor,
 } from "./board-drag-dom"
 import type { KanbanColumn, KanbanItem } from "./types"
 
-/** Pointer travel (px) before a press becomes a drag. Below this, the press is
- *  treated as a click so card selection still works. */
+/** Pointer travel (px) before a press becomes a drag rather than a click. */
 const DRAG_THRESHOLD_PX = 4
 
 export interface UseBoardDragArgs {
@@ -34,17 +37,15 @@ export interface BoardDragHandlers {
 }
 
 export interface UseBoardDrag {
-  /** Id of the card being dragged, or null. */
   draggingId: string | null
-  /** Column id under the pointer during a drag, or null. */
   hoverColumnId: string | null
-  /** Spread onto the board container. */
   dragHandlers: BoardDragHandlers
 }
 
 interface Gesture {
   pointerId: number
   item: KanbanItem
+  cardEl: HTMLElement // pressed card root, cloned into the ghost on drag start
   startX: number
   startY: number
   started: boolean
@@ -52,16 +53,12 @@ interface Gesture {
 }
 
 /**
- * Custom pointer-events drag for kanban cards, owned entirely by the board (no
- * native HTML5 DnD). Because we drive the drag ourselves, the cursor is the
- * SAME on every OS — set via `body` classes in globals.css — instead of the
- * per-OS cursor the browser picks for a native drag.
- *
- * Wiring is delegated: the board spreads `dragHandlers` on its container, cards
- * carry `data-kanban-card`/`data-kanban-draggable`, columns carry
- * `data-kanban-column`. A press on a draggable card starts a gesture; once the
- * pointer travels past the threshold it becomes a drag (cursor + dim + column
- * highlight); releasing over an eligible column commits the move.
+ * Custom pointer-events drag for kanban cards, owned by the board (no native
+ * HTML5 DnD) so the cursor is the SAME on every OS — set via `body` classes in
+ * globals.css. Delegated: the board spreads `dragHandlers`; cards/columns carry
+ * `data-kanban-*` markers. Press a draggable card, cross the threshold to start
+ * the drag (cursor + dim + ghost + column highlight), release on an eligible
+ * column to move.
  */
 export function useBoardDrag({
   items,
@@ -74,25 +71,23 @@ export function useBoardDrag({
   const [hoverColumnId, setHoverColumnId] = useState<string | null>(null)
 
   const gesture = useRef<Gesture | null>(null)
-  // Set when a drag ends so the click that fires right after is swallowed
-  // (otherwise releasing a drag would also select the card).
+  // Set on drag end so the click that immediately follows is swallowed (else
+  // releasing a drag would also select the card).
   const justDragged = useRef(false)
 
   const finish = useCallback(() => {
     const g = gesture.current
-    if (g?.started) {
-      if (g.boardEl.hasPointerCapture(g.pointerId)) {
-        g.boardEl.releasePointerCapture(g.pointerId)
-      }
-      endDragCursor()
+    if (g?.started && g.boardEl.hasPointerCapture(g.pointerId)) {
+      g.boardEl.releasePointerCapture(g.pointerId)
     }
+    endDragCursor()
+    removeDragGhost()
     gesture.current = null
     setDraggingId(null)
     setHoverColumnId(null)
   }, [])
 
-  // Escape cancels an in-flight drag (no move). One stable listener for the
-  // board's lifetime; also clears any stray drag cursor on unmount.
+  // Escape aborts an in-flight drag (no move); also cleans up on unmount.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && gesture.current?.started) finish()
@@ -101,6 +96,7 @@ export function useBoardDrag({
     return () => {
       window.removeEventListener("keydown", onKey, true)
       endDragCursor()
+      removeDragGhost()
     }
   }, [finish])
 
@@ -120,13 +116,15 @@ export function useBoardDrag({
     (e: React.PointerEvent) => {
       justDragged.current = false
       if (!enabled || e.button !== 0 || e.pointerType === "touch") return
-      const id = draggableCardIdAt(e.target)
-      if (!id) return
+      const cardEl = draggableCardAt(e.target)
+      const id = cardEl && cardIdOf(cardEl)
+      if (!cardEl || !id) return
       const item = items.find((i) => i.id === id)
       if (!item) return
       gesture.current = {
         pointerId: e.pointerId,
         item,
+        cardEl,
         startX: e.clientX,
         startY: e.clientY,
         started: false,
@@ -147,8 +145,10 @@ export function useBoardDrag({
         g.started = true
         setDraggingId(g.item.id)
         startDragCursor()
+        createDragGhost(g.cardEl, e.clientX, e.clientY)
         g.boardEl.setPointerCapture(g.pointerId)
       }
+      moveDragGhost(e.clientX, e.clientY)
       const { colId, role } = roleAt(g.item, e.clientX, e.clientY)
       setHoverColumnId(colId)
       setDragForbidden(role === "forbidden")

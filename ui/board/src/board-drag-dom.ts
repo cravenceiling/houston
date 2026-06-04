@@ -22,15 +22,17 @@ const INTERACTIVE_SELECTOR =
 const DRAGGING_CLASS = "kanban-dragging"
 const FORBIDDEN_CLASS = "kanban-dragging-forbidden"
 
-/** Id of the draggable card under `target`, or null — also null when the press
+/** The draggable card root under `target`, or null — also null when the press
  *  landed on an interactive control that owns its own gesture. */
-export function draggableCardIdAt(target: EventTarget | null): string | null {
+export function draggableCardAt(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null
   if (target.closest(INTERACTIVE_SELECTOR)) return null
-  return (
-    target.closest(`[${CARD_DRAGGABLE_ATTR}]`)?.getAttribute(CARD_ID_ATTR) ??
-    null
-  )
+  return target.closest<HTMLElement>(`[${CARD_DRAGGABLE_ATTR}]`)
+}
+
+/** The mission id a card root carries. */
+export function cardIdOf(card: HTMLElement): string | null {
+  return card.getAttribute(CARD_ID_ATTR)
 }
 
 /** Id of the column at viewport point (x, y), or null. */
@@ -57,4 +59,64 @@ export function setDragForbidden(forbidden: boolean): void {
 /** Clear the global drag cursor (drag ended, cancelled, or unmounted). */
 export function endDragCursor(): void {
   document.body.classList.remove(DRAGGING_CLASS, FORBIDDEN_CLASS)
+}
+
+// A single floating clone of the card follows the cursor during a drag (native
+// HTML5 DnD drew this "drag image" for free; the pointer drag has to render it).
+// Module-level singleton — only one card drags at a time.
+let ghostEl: HTMLElement | null = null
+let ghostOffsetX = 0
+let ghostOffsetY = 0
+
+function positionGhost(pointerX: number, pointerY: number): void {
+  if (ghostEl) {
+    ghostEl.style.transform = `translate(${pointerX - ghostOffsetX}px, ${pointerY - ghostOffsetY}px)`
+  }
+}
+
+/** Clone `source` into a fixed, click-through ghost pinned under the cursor at
+ *  the same grab point. Appended to `<body>`; the theme attribute lives on
+ *  `<html>`, so it inherits light/dark + CSS vars. */
+export function createDragGhost(
+  source: HTMLElement,
+  pointerX: number,
+  pointerY: number,
+): void {
+  removeDragGhost()
+  const rect = source.getBoundingClientRect()
+  ghostOffsetX = pointerX - rect.left
+  ghostOffsetY = pointerY - rect.top
+  const clone = source.cloneNode(true) as HTMLElement
+  clone.removeAttribute(CARD_ID_ATTR)
+  clone.removeAttribute(CARD_DRAGGABLE_ATTR)
+  clone.setAttribute("aria-hidden", "true")
+  Object.assign(clone.style, {
+    position: "fixed",
+    top: "0px",
+    left: "0px",
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    margin: "0",
+    // Click-through so `elementFromPoint` hit-tests the column underneath and
+    // the global drag cursor (not the card's) shows.
+    pointerEvents: "none",
+    zIndex: "9999",
+    opacity: "0.9",
+    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.22)",
+    transition: "none",
+  })
+  positionGhost(pointerX, pointerY)
+  document.body.appendChild(clone)
+  ghostEl = clone
+}
+
+/** Move the ghost to follow the cursor. */
+export function moveDragGhost(pointerX: number, pointerY: number): void {
+  positionGhost(pointerX, pointerY)
+}
+
+/** Remove the ghost (drag ended, cancelled, or unmounted). */
+export function removeDragGhost(): void {
+  ghostEl?.remove()
+  ghostEl = null
 }
