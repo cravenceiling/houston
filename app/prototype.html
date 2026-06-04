@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  PROTOTYPE — recurrence picker design exploration (issue #430). THROWAWAY.
+
+  Dev-only entry: `vite build` only inputs index.html, so this page never ships.
+  Run `pnpm dev` in app/ and open http://localhost:1420/prototype.html to flip
+  between the four recurrence-picker variants. Bypasses the app's EngineGate, so
+  it needs no engine, no Tauri, no workspace — just the design system.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recurrence picker — prototype</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/prototype/main.tsx"></script>
+  </body>
+</html>
