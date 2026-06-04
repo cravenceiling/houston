@@ -1013,12 +1013,34 @@ jobs:
           }
           Write-Host "Pinned Bun OK: $actual"
 
-      - name: Install jq + zstd (Chocolatey)
+      # jq is preinstalled on the GitHub Windows runners. zstd is NOT, and the
+      # Chocolatey community feed (community.chocolatey.org) 504s intermittently
+      # — it failed the ARM64 release leg repeatedly. Pull zstd straight from
+      # its GitHub release instead (pinned), which is far more reliable. The
+      # x64 binary runs natively on x64 and under emulation on the ARM64 runner;
+      # it's only used to decompress the codex archive in fetch-cli-deps.sh.
+      - name: Install jq + zstd
         shell: pwsh
         run: |
-          choco install -y jq zstandard --no-progress
+          $ErrorActionPreference = "Stop"
           jq --version
-          zstd --version
+
+          $ZSTD = "1.5.6"
+          $zip = "zstd-v$ZSTD-win64.zip"
+          $url = "https://github.com/facebook/zstd/releases/download/v$ZSTD/$zip"
+          $tmp = Join-Path $env:RUNNER_TEMP $zip
+          $out = Join-Path $env:RUNNER_TEMP "zstd"
+          Write-Host "Downloading $url"
+          for ($i = 1; $i -le 3; $i++) {
+            try { Invoke-WebRequest -Uri $url -OutFile $tmp; break }
+            catch { if ($i -eq 3) { throw }; Write-Host "retry $i…"; Start-Sleep 5 }
+          }
+          Expand-Archive -Force -Path $tmp -DestinationPath $out
+          # Zip extracts to a single `zstd-v<ver>-win64\` folder containing zstd.exe.
+          $dir = (Get-ChildItem -Path $out -Directory | Select-Object -First 1).FullName
+          if (-not $dir) { $dir = $out }
+          echo "$dir" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & "$dir\zstd.exe" --version
 
       # Stage bundled CLI binaries: codex.exe (downloaded + zstd),
       # composio-<arch>/composio.exe (built from gethouston/composio
