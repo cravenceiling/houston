@@ -4,6 +4,11 @@ import {
   makeRendererTransport,
 } from "tauri-plugin-sentry-api";
 import { isReplayEnvelope } from "./sentry-replay";
+import {
+  makeSplitTransportSend,
+  makeSplitTransportFlush,
+  resolveCapturedEventId,
+} from "./sentry-transport";
 
 // __SENTRY_DSN__ baked at build time by Vite (see vite.config.ts). Empty
 // string in dev / forks → init bails, every capture is a silent no-op.
@@ -54,19 +59,18 @@ export function initSentry(): void {
     // enter a recording (the masking integration options below enforce this).
     sendDefaultPii: false,
     // Split transport: replay -> direct HTTP, everything else -> Rust via IPC.
+    // Routing + combined-flush logic lives in the pure, unit-tested
+    // ./sentry-transport helpers (this factory can't run under node:test).
     transport: (options) => {
       const ipcTransport = makeRendererTransport(options);
       const fetchTransport = Sentry.makeFetchTransport(options);
       return {
-        send: (envelope) =>
-          isReplayEnvelope(envelope)
-            ? fetchTransport.send(envelope)
-            : ipcTransport.send(envelope),
-        flush: (timeout) =>
-          Promise.all([
-            ipcTransport.flush(timeout),
-            fetchTransport.flush(timeout),
-          ]).then((results) => results.every(Boolean)),
+        send: makeSplitTransportSend(
+          ipcTransport,
+          fetchTransport,
+          isReplayEnvelope,
+        ),
+        flush: makeSplitTransportFlush(ipcTransport, fetchTransport),
       };
     },
     integrations: (defaultIntegrations) => [
@@ -106,7 +110,7 @@ export async function captureException(
     context ? { tags: context } : undefined,
   );
   const flushed = await Sentry.flush(5000);
-  return flushed ? eventId : "";
+  return resolveCapturedEventId(eventId, flushed);
 }
 
 /**
