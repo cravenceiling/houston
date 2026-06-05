@@ -688,8 +688,13 @@ jobs:
               echo "::warning::missing dSYM $D — native frames from it may stay unresolved"
             fi
           done
-          # sentry-cli recurses into the .dSYM bundles.
-          "$SENTRY_CLI" debug-files upload "${UPLOAD[@]}"
+          # sentry-cli recurses into the .dSYM bundles. --include-sources bundles
+          # the referenced source files (Houston's own Rust + cargo-registry
+          # crates present in this checkout) so native stack traces show inline
+          # CODE context, not just file:line. The repo is open source, so there's
+          # no exposure concern — this brings native to parity with the JS source
+          # maps (which already inline sourcesContent).
+          "$SENTRY_CLI" debug-files upload --include-sources "${UPLOAD[@]}"
 
       # Rename the mounted-volume label from "Houston" (Tauri default,
       # derived from productName) to "Houston Installer" before we
@@ -1194,7 +1199,10 @@ jobs:
           test -f "target/${{ matrix.target }}/release/houston_app.pdb"
           test -f "target/${{ matrix.target }}/release/houston-engine.exe"
           test -f "target/${{ matrix.target }}/release/houston_engine.pdb"
-          "$SENTRY_CLI" debug-files upload \
+          # --include-sources bundles the referenced source (Houston's Rust +
+          # cargo crates in this checkout) so native frames show inline CODE,
+          # not just file:line. Open-source repo → no exposure concern.
+          "$SENTRY_CLI" debug-files upload --include-sources \
             "target/${{ matrix.target }}/release/houston-app.exe" \
             "target/${{ matrix.target }}/release/houston_app.pdb" \
             "target/${{ matrix.target }}/release/houston-engine.exe" \
