@@ -24,6 +24,11 @@ import { claudeRoutes } from "./routes/claude.ts";
 import { watcherRoutes } from "./routes/watcher.ts";
 import { skillRoutes } from "./routes/skills.ts";
 import { routineRoutes } from "./routes/routines.ts";
+import { agentConfigRoutes } from "./routes/agent-configs.ts";
+import { conversationRoutes } from "./routes/conversations.ts";
+import { composioRoutes } from "./routes/composio.ts";
+import { tunnelRoutes } from "./routes/tunnel.ts";
+import { storeRoutes } from "./routes/store.ts";
 
 export function buildApp(engine: EngineState): Hono {
   const app = new Hono();
@@ -62,6 +67,11 @@ export function buildApp(engine: EngineState): Hono {
   app.route("/v1", watcherRoutes(engine));
   app.route("/v1", skillRoutes(engine));
   app.route("/v1", routineRoutes(engine));
+  app.route("/v1", agentConfigRoutes(engine));
+  app.route("/v1", conversationRoutes(engine));
+  app.route("/v1", composioRoutes());
+  app.route("/v1", tunnelRoutes());
+  app.route("/v1", storeRoutes());
 
   return app;
 }

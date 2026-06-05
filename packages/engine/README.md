@@ -120,18 +120,22 @@ HOUSTON_HOME=/tmp/fix HOUSTON_ENGINE_TOKEN=t bun run packages/engine/core/script
 | Milestone | Status |
 |---|---|
 | M1 — server + auth + WS firehose + banner + watchdog + engine.json | ✅ |
-| M2 — read domain (workspaces, agents, `.houston` files, project files, config, activities) | ✅ |
+| M2 — read domain (workspaces, agents, `.houston` files, project files, config, activities, agent-configs, conversations) | ✅ |
 | M3 — live chat turn via pi (streaming, tools, file-change attribution, chat_feed, board flips, history, cancel) | ✅ |
 | M4 — providers/auth | 🟡 OAuth login (Claude + Codex) + **Anthropic chat via the OAuth token** (pi auto-detects `sk-ant-oat` → Bearer + beta headers) + model-alias table (`sonnet`→`claude-sonnet-4-5`, …) + activity (board mission) CRUD done; remaining: Codex subscription chat (codex-responses path) and the full `ProviderError` taxonomy |
-| M5 — routines + scheduler (cron, run-now/cancel, heartbeat) | ⬜ |
-| M6 — store, skills (+ community), portable agent share/import | ⬜ |
-| M7 — attachments (two-phase upload), worktrees, `/shell`, file watcher | ⬜ |
-| M8 — mobile tunnel + device tokens, composio | ⬜ |
+| M5 — routines + scheduler (cron, run-now/cancel, heartbeat) | 🟡 agent-create, file watcher, skills + routines CRUD, title summarize done; the **runner** (cron fire / run-now) is still an honest `503` |
+| M6 — store, skills (+ community), portable agent share/import | 🟡 store **catalog + search reads** + local skills CRUD done; install / community search / portable share answer an honest `503` |
+| M7 — attachments (two-phase upload), worktrees, `/shell`, file watcher | 🟡 file watcher done; attachments / worktrees / `/shell` pending |
+| M8 — mobile tunnel + device tokens, composio | 🟡 tunnel + composio **status reads** (calm not-connected) done; pairing / login / connect answer an honest `503` |
 | M9 — bundled single-binary sidecar in CI + cross-platform compile | 🟡 (`bun --compile` proven locally) |
 
-The agent-CRUD `create` route and the typed agent-data write routes
-(activities/routines mutate) land with M3 follow-ups + M5; today the read surface
-and the live turn are complete.
+**Calm boot reads.** The desktop app fires a fan of reads on launch (`agent-configs`,
+`conversations/list(-all)`, `composio/{status,cli-installed,apps,connections}`,
+`tunnel/status`, `store/catalog`). Every one is implemented — returning real data or
+the same not-configured / disconnected shape the Rust engine returns — so the app's
+"no silent failure" toast policy stays quiet instead of erroring on a missing route.
+The *actions* behind the not-yet-ported features (store/composio/tunnel mutations)
+answer a deliberate `503 UNAVAILABLE` with a clear message rather than a bare 404.
 
 ## Key decisions
 

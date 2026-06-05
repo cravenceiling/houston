@@ -209,6 +209,9 @@ export interface ConversationEntry {
   updated_at?: string;
   agent_path: string;
   agent_name: string;
+  agent?: string;
+  routine_id?: string;
+  worktree_path?: string;
 }
 
 // ---------- Preferences ----------
@@ -296,4 +299,48 @@ export interface ClaudeStatus {
   pinnedVersion: string | null;
   installedVersion: string | null;
   lastInstallError: unknown | null;
+}
+
+// ---------- Agent store (snake_case, matches the store API + on-disk JSON) ----------
+
+export interface StoreListing {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  author: string;
+  tags: string[];
+  icon_url: string;
+  integrations: string[];
+  repo: string;
+  installs: number;
+  registered_at: string;
+  version?: string | null;
+  content_hash?: string | null;
+  bundled: boolean;
+}
+
+// ---------- Composio (tagged status; entries are snake_case) ----------
+
+export type ComposioStatus =
+  | { status: "not_installed" }
+  | { status: "needs_auth" }
+  | { status: "ok"; email: string | null; org_name: string | null }
+  | { status: "error"; message: string };
+
+export interface ComposioAppEntry {
+  toolkit: string;
+  name: string;
+  description: string;
+  logo_url: string;
+  categories: string[];
+}
+
+// ---------- Mobile tunnel (camelCase) ----------
+
+export interface TunnelStatus {
+  connected: boolean;
+  tunnelId: string | null;
+  publicHost: string | null;
+  lastActivityMs: number | null;
 }

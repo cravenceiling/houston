@@ -70,12 +70,15 @@ with Anthropic** → approve in the browser → start a mission and chat.
 
 **Works:** boot/handshake, workspaces + agents, file browser with live updates,
 board missions, **real Claude chat** (Path A via key, Path B via OAuth login),
-OAuth login for Claude + Codex.
+OAuth login for Claude + Codex, the conversations list, agent configs, skills, and
+the agent store catalog (browse/search). Integrations (Composio) and phone pairing
+show a calm "not connected" state instead of erroring.
 
-**Not yet (empty/erroring in the app):** routines, store, skills, Composio,
-conversations list, worktrees, attachments, and **chatting through a Codex
-(ChatGPT) subscription** — Codex *login* works, the turn needs a follow-up. See
-`packages/engine/README.md`.
+**Not yet (a clear "not available yet" message, not a crash):** the routines
+*runner* (scheduling exists; runs don't fire yet), installing from the store /
+GitHub, Composio connect/login, phone pairing, worktrees, attachments, and
+**chatting through a Codex (ChatGPT) subscription** — Codex *login* works, the turn
+needs a follow-up. See `packages/engine/README.md`.
 
 ## Troubleshooting (Windows)
 
