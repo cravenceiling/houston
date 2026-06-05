@@ -7,6 +7,7 @@ export * from "./tools.ts";
 export * from "./feed-mapping.ts";
 export * from "./file-changes.ts";
 export * from "./session-id.ts";
+export * from "./transcript-store.ts";
 export * from "./runtime.ts";
 export * from "./history.ts";
 export * from "./summarize.ts";

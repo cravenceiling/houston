@@ -22,6 +22,7 @@ import { readConfig, setActivityStatusBySessionKey } from "../agent-store.ts";
 import { log } from "../log.ts";
 import { assembleSessionPrompt, buildAgentContext, seedAgent } from "./prompt.ts";
 import { resolveSessionId } from "./session-id.ts";
+import { loadTranscript, saveTranscript } from "./transcript-store.ts";
 import { createTools } from "./tools.ts";
 import { createFeedSink } from "./feed-mapping.ts";
 import { diff, isEmpty, snapshot } from "./file-changes.ts";
@@ -140,11 +141,18 @@ async function runTurn(engine: EngineState, params: StartTurnParams): Promise<vo
       sessionKey,
       sessionId,
       source,
+      userMessage: params.prompt,
     });
 
-    // Cross-client echo + persist of the user message.
-    sink.emit(Feed.userMessage(params.prompt));
+    // The user-message echo is emitted lazily by the sink on the first model
+    // event (see `feed-mapping.ts`): emitting it eagerly here would beat the
+    // frontend's optimistic push and duplicate the message.
     engine.events.emit(Ev.sessionStatus(agentPath, sessionKey, "starting"));
+
+    // Conversation memory: seed the agent with the prior transcript for this
+    // slot. The in-process loop has no provider-side session to resume, so the
+    // transcript IS the memory (saved at the end of the turn, below).
+    const priorMessages = loadTranscript(agentDir, providerId, sessionKey);
 
     const agent = new Agent({
       initialState: {
@@ -152,6 +160,7 @@ async function runTurn(engine: EngineState, params: StartTurnParams): Promise<vo
         model: resolved.model,
         thinkingLevel: effortToThinking(effort),
         tools: createTools(workingDir),
+        messages: priorMessages,
       },
       sessionId,
       // Supply the provider's OAuth access token (auto-refreshed) so a
@@ -170,10 +179,20 @@ async function runTurn(engine: EngineState, params: StartTurnParams): Promise<vo
       await agent.prompt(params.prompt);
     } finally {
       engine.control.clearActive(agentPath, sessionKey);
+      // Backstop: a turn that failed before any model event still records the
+      // prompt (idempotent — the sink already emitted it on the first event).
+      sink.ensureUserMessage();
     }
 
     const errorMessage = agent.state.errorMessage;
     const durationMs = Date.now() - startedAt;
+
+    // Persist the transcript for the next turn's memory — only on a clean turn,
+    // so a cancelled / errored turn never leaves a dangling assistant tool_call
+    // (with no matching tool_result) that would break the next turn's model call.
+    if (!errorMessage) {
+      saveTranscript(agentDir, providerId, sessionKey, agent.state.messages);
+    }
 
     if (!errorMessage) {
       const changes = diff(before, snapshot(workingDir));

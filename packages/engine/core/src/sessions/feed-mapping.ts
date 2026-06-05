@@ -30,6 +30,8 @@ export interface FeedSinkOptions {
   sessionKey: string;
   sessionId: string;
   source: string;
+  /** The user prompt that started this turn, echoed once on the first model event. */
+  userMessage: string;
 }
 
 export interface FeedSink {
@@ -37,6 +39,13 @@ export interface FeedSink {
   onEvent(event: AgentEvent): void;
   /** Emit (and persist non-streaming) an item directly — used by the runtime. */
   emit(item: FeedItem): void;
+  /**
+   * Emit + persist the turn's `user_message` exactly once (idempotent). Fired
+   * automatically on the first post-network agent event; the runtime also calls
+   * it as a backstop so a turn that fails before any model event still records
+   * the prompt.
+   */
+  ensureUserMessage(): void;
 }
 
 function extractText(result: { content?: Array<{ type: string; text?: string }> } | undefined): string {
@@ -50,6 +59,7 @@ function extractText(result: { content?: Array<{ type: string; text?: string }> 
 export function createFeedSink(opts: FeedSinkOptions): FeedSink {
   let textBuf = "";
   let thinkingBuf = "";
+  let userMessageEmitted = false;
 
   const emit = (item: FeedItem): void => {
     opts.events.emit(Ev.feedItem(opts.agentPath, opts.sessionKey, item));
@@ -63,7 +73,23 @@ export function createFeedSink(opts: FeedSinkOptions): FeedSink {
     }
   };
 
+  const ensureUserMessage = (): void => {
+    if (userMessageEmitted) return;
+    userMessageEmitted = true;
+    emit(Feed.userMessage(opts.userMessage));
+  };
+
   const onEvent = (event: AgentEvent): void => {
+    // Defer the user_message echo to the first event that required a model
+    // round-trip. `agent_start`/`turn_start` fire synchronously at prompt()
+    // entry (pre-network), so emitting on them would race AHEAD of the
+    // frontend's optimistic push and the count-based echo dedup would double
+    // the message. `message_start` (and everything after) only fires once the
+    // provider has responded — the in-process analogue of the Rust engine's
+    // `SessionId`-time echo, which lands after the client registered its echo.
+    if (event.type !== "agent_start" && event.type !== "turn_start") {
+      ensureUserMessage();
+    }
     switch (event.type) {
       case "turn_start":
         textBuf = "";
@@ -112,5 +138,5 @@ export function createFeedSink(opts: FeedSinkOptions): FeedSink {
     }
   };
 
-  return { onEvent, emit };
+  return { onEvent, emit, ensureUserMessage };
 }
