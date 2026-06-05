@@ -111,6 +111,7 @@ export function MissionControlArchived({
       <div className="flex-1 min-h-0">
         <AIBoard
           layout="list"
+          listAlign="left"
           items={missionSearch.items}
           searchSnippets={missionSearch.snippets}
           selectedId={data.selectedId}

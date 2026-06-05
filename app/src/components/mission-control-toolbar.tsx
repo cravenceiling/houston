@@ -74,7 +74,9 @@ export function MissionControlToolbar({
             <TooltipContent side="bottom">{t("archived.back")}</TooltipContent>
           </Tooltip>
         )}
-        <h1 className="shrink-0 text-xl font-semibold text-foreground">{t("title")}</h1>
+        <h1 className="shrink-0 text-xl font-semibold text-foreground">
+          {archivedActive ? t("archived.title") : t("title")}
+        </h1>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           <MissionSearchInput
             value={search}

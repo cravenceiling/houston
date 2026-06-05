@@ -174,6 +174,10 @@ export interface AIBoardProps {
   /** Left-pane layout. "board" = kanban columns (default); "list" = a single
    *  column-less vertical list (used by the Archived missions tab). */
   layout?: "board" | "list"
+  /** Sizing of the "list" layout rail. "center" (default) keeps the list as a
+   *  fixed-width centered column; "left" fills the full pane width, left-aligned
+   *  (the wide Archived views). Ignored in "board" layout. */
+  listAlign?: "center" | "left"
   /** Per-item matched body fragment (keyed by `KanbanItem.id`) shown below a row
    *  when the search matched in the body/history rather than the title. Applied
    *  in the "list" layout. */
@@ -276,6 +280,7 @@ export function AIBoard({
   composerOverride,
   composerLabels,
   layout = "board",
+  listAlign,
   searchSnippets,
   selectable,
   selectedIds,
@@ -527,6 +532,7 @@ export function AIBoard({
           avatar={cardAvatar}
           cardLabels={cardLabels}
           searchSnippets={searchSnippets}
+          align={listAlign}
         />
       ) : (
         <KanbanBoard

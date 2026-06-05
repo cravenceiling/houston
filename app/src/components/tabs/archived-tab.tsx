@@ -131,6 +131,7 @@ export default function ArchivedTab({ agent, agentDef }: TabProps) {
       <div className="min-h-0 flex-1">
         <AIBoard
           layout="list"
+          listAlign="left"
           items={archivedSearch.missionSearch.items}
           searchSnippets={archivedSearch.missionSearch.snippets}
           selectedId={selectedId}
