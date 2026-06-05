@@ -136,9 +136,8 @@ export function WorkspaceShell({ toasts, onDismissToast }: WorkspaceShellProps) 
                             value={agentMissionSearchQuery}
                             isSearchingText={agentMissionSearchLoading}
                             labels={{
-                              placeholder: missionPanelOpen
-                                ? t("board:search.placeholderShort")
-                                : t("board:search.placeholder"),
+                              placeholder: t("board:search.placeholder"),
+                              placeholderShort: t("board:search.placeholderShort"),
                               clear: t("board:search.clear"),
                               searchingText: t("board:search.searchingText"),
                             }}

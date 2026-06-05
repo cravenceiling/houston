@@ -1,6 +1,7 @@
 {
   "title": "Mission Control",
   "archived": {
+    "back": "Back",
     "button": "Archived"
   },
   "filter": {

@@ -98,6 +98,7 @@ export function MissionControlArchived({
         onSearchChange={setSearch}
         archivedActive
         onToggleArchived={onShowActive}
+        onBack={onShowActive}
         onNewMission={() => {
           // Mirror the per-agent Archived tab: New mission lives in the bar
           // here too. Return to the active board, then open its agent picker

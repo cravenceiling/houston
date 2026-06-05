@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
   cn,
 } from "@houston-ai/core";
-import { Archive, ChevronDown, ListFilter } from "lucide-react";
+import { Archive, ArrowLeft, ChevronDown, ListFilter } from "lucide-react";
 import { HoustonLogo } from "./shell/experience-card";
 import { AgentCardAvatar } from "./shell/agent-card-avatar";
 import type { Agent } from "../lib/types";
@@ -30,6 +30,9 @@ interface MissionControlToolbarProps {
   onToggleArchived: () => void;
   /** "New mission" trigger. Present in both the active and archived toolbars. */
   onNewMission?: () => void;
+  /** When set, renders a back button on the left (used by the Archived view to
+   *  return to the active board). */
+  onBack?: () => void;
   /** Compact layout: a chat panel is open, so the board is narrow. Shrinks the
    *  search placeholder and collapses the buttons to icons so the title stays
    *  on one line. The search itself flexes to fill whatever space is left. */
@@ -46,6 +49,7 @@ export function MissionControlToolbar({
   archivedActive,
   onToggleArchived,
   onNewMission,
+  onBack,
   collapsed,
 }: MissionControlToolbarProps) {
   const { t } = useTranslation("dashboard");
@@ -54,13 +58,30 @@ export function MissionControlToolbar({
   return (
     <div className="shrink-0 px-5 pt-4">
       <div className="mb-3 flex items-center gap-3">
+        {onBack && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="-ml-2 shrink-0 rounded-full"
+                onClick={onBack}
+                aria-label={t("archived.back")}
+              >
+                <ArrowLeft className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t("archived.back")}</TooltipContent>
+          </Tooltip>
+        )}
         <h1 className="shrink-0 text-xl font-semibold text-foreground">{t("title")}</h1>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           <MissionSearchInput
             value={search}
             isSearchingText={isSearchingText}
             labels={{
-              placeholder: collapsed ? t("search.placeholderShort") : t("search.placeholder"),
+              placeholder: t("search.placeholder"),
+              placeholderShort: t("search.placeholderShort"),
               clear: t("search.clear"),
               searchingText: t("search.searchingText"),
             }}
