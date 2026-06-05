@@ -150,8 +150,8 @@ export function WorkspaceShell({ toasts, onDismissToast }: WorkspaceShellProps) 
                           className="rounded-full"
                           onClick={() => setUiTourActive(true)}
                         >
-                          {t("shell:tabActions.startTour")}
                           <Compass className="size-4" />
+                          {t("shell:tabActions.startTour")}
                         </Button>
                         {onStartMission && (
                           <Tooltip>
