@@ -3,14 +3,8 @@ import { useTranslation } from "react-i18next";
 import { AIBoard } from "@houston-ai/board";
 
 import { useUIStore } from "../../stores/ui";
-import { useAgentStore } from "../../stores/agents";
 import { useAgentCatalogStore } from "../../stores/agent-catalog";
-import { useFeedStore } from "../../stores/feeds";
 import { openAgentHref } from "../../lib/open-href";
-import { tauriAttachments, tauriChat } from "../../lib/tauri";
-import { buildAttachmentPrompt } from "../../lib/attachment-message";
-import { analytics } from "../../lib/analytics";
-import { classifyFileKind } from "../../lib/file-kind";
 import { useDetailPanelContainer } from "../shell/detail-panel-context";
 import { HoustonThinkingIndicator } from "../shell/experience-card";
 import { AgentPanelAvatar } from "../shell/agent-panel-avatar";
@@ -20,14 +14,14 @@ import { useMissionSearch } from "../use-mission-search";
 import { MissionControlToolbar } from "../mission-control-toolbar";
 import { ArchivedEmptyState } from "../tabs/archived-tab-search";
 import { useMissionControlArchived } from "./use-mission-control-archived";
+import { useMissionControlArchivedSend } from "./use-mission-control-archived-send";
 import type { Agent } from "../../lib/types";
 
 /**
  * Cross-agent Archived view for Mission Control. Same list UI as the per-agent
  * Archived tab, but spanning every agent: a column-less list of all archived
- * missions; clicking one opens its chat; sending a message re-activates it
- * (the engine flips `archived → running` on session start) and hands the user
- * off to that agent's active board to keep the conversation in view.
+ * missions; clicking one opens its chat; sending re-activates it and hands the
+ * user off to that agent's active board to keep the conversation in view.
  */
 export function MissionControlArchived({
   agents,
@@ -36,15 +30,12 @@ export function MissionControlArchived({
   agents: Agent[];
   onShowActive: () => void;
 }) {
-  const { t } = useTranslation(["dashboard", "board", "chat"]);
+  const { t } = useTranslation("board");
   const panelContainer = useDetailPanelContainer();
   const getAgentDef = useAgentCatalogStore((s) => s.getById);
   const addToast = useUIStore((s) => s.addToast);
   const setMissionPanelOpen = useUIStore((s) => s.setMissionPanelOpen);
   const missionPanelOpen = useUIStore((s) => s.missionPanelOpen);
-  const setViewMode = useUIStore((s) => s.setViewMode);
-  const setActivityPanelId = useUIStore((s) => s.setActivityPanelId);
-  const pushFeedItem = useFeedStore((s) => s.pushFeedItem);
 
   const data = useMissionControlArchived(agents);
   const attachmentValidation = useAttachmentRejectionDialog();
@@ -57,8 +48,8 @@ export function MissionControlArchived({
   );
   const handleSearchError = useCallback(() => {
     addToast({
-      title: t("board:search.historyErrorTitle"),
-      description: t("board:search.historyErrorDescription"),
+      title: t("search.historyErrorTitle"),
+      description: t("search.historyErrorDescription"),
       variant: "error",
     });
   }, [addToast, t]);
@@ -86,48 +77,15 @@ export function MissionControlArchived({
     selectedSessionKey,
     onSelectSession: data.setSelectedId,
   });
-
-  // Sending re-activates the archived mission. Mirror the per-agent Archived
-  // tab: send, then hand off to the mission's agent board with the chat open
-  // (and drop back to Mission Control's active view for when the user returns).
-  const handleSendMessage = useCallback(
-    async (sessionKey: string, text: string, files: File[]) => {
-      if (!activeAgent || !selectedItem) return;
-      const agentPath = activeAgent.folderPath;
-      const missionId = selectedItem.id;
-      const mode = activeAgentDef?.config.agents?.find(
-        (m) => m.id === (selectedItem.metadata?.agent as string | undefined),
-      );
-      const worktreePath = selectedItem.metadata?.worktreePath as string | undefined;
-      try {
-        const paths = await tauriAttachments.save(`activity-${missionId}`, files);
-        const prompt = buildAttachmentPrompt(text, files, paths);
-        await tauriChat.send(agentPath, prompt, sessionKey, {
-          mode: mode?.promptFile,
-          workingDirOverride: worktreePath ?? undefined,
-          providerOverride: panel.effectiveProvider,
-          modelOverride: panel.effectiveModel,
-        });
-        pushFeedItem(agentPath, sessionKey, { feed_type: "user_message", data: prompt });
-        analytics.track("chat_message_sent");
-        for (const f of files) analytics.track("file_attached", { file_kind: classifyFileKind(f) });
-        // Reactivated (archived → running). Switching to the agent's board
-        // unmounts Mission Control, so showArchived resets on its next mount —
-        // no need to flip it here. Hand off with the chat open.
-        data.setSelectedId(null);
-        useAgentStore.getState().setCurrent(activeAgent);
-        setViewMode("activity");
-        setActivityPanelId(missionId, { forceOpen: true });
-      } catch (err) {
-        pushFeedItem(agentPath, sessionKey, {
-          feed_type: "system_message",
-          data: t("chat:errors.sessionStart", { error: String(err) }),
-        });
-        throw err;
-      }
-    },
-    [activeAgent, selectedItem, activeAgentDef, panel.effectiveProvider, panel.effectiveModel, pushFeedItem, setViewMode, setActivityPanelId, data, t],
-  );
+  const clearSelection = useCallback(() => data.setSelectedId(null), [data]);
+  const handleSendMessage = useMissionControlArchivedSend({
+    activeAgent,
+    activeAgentDef,
+    selectedItem,
+    providerOverride: panel.effectiveProvider,
+    modelOverride: panel.effectiveModel,
+    onReactivated: clearSelection,
+  });
 
   return (
     <>
@@ -140,6 +98,13 @@ export function MissionControlArchived({
         onSearchChange={setSearch}
         archivedActive
         onToggleArchived={onShowActive}
+        onNewMission={() => {
+          // Mirror the per-agent Archived tab: New mission lives in the bar
+          // here too. Return to the active board, then open its agent picker
+          // (the active source registers onStartMission once it mounts).
+          onShowActive();
+          setTimeout(() => useUIStore.getState().onStartMission?.(), 50);
+        }}
         collapsed={missionPanelOpen}
       />
       <div className="flex-1 min-h-0">
@@ -171,9 +136,9 @@ export function MissionControlArchived({
           panelAgentName={activeAgent?.name ?? selectedItem?.subtitle}
           panelAvatar={<AgentPanelAvatar color={activeAgent?.color} running={false} />}
           cardLabels={{
-            deleteTooltip: t("board:cardActions.deleteTooltip"),
-            deleteTitle: (name: string) => t("board:deleteCard.titleWithName", { name }),
-            deleteDescription: t("board:deleteCard.description"),
+            deleteTooltip: t("cardActions.deleteTooltip"),
+            deleteTitle: (name: string) => t("deleteCard.titleWithName", { name }),
+            deleteDescription: t("deleteCard.description"),
           }}
           chatEmptyState={panel.chatEmptyState}
           composerHeader={panel.composerHeader}
