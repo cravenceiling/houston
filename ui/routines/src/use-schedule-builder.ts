@@ -17,6 +17,7 @@ import {
   cronToInterval,
   type IntervalUnit,
 } from "./schedule-interval-utils"
+import { DEFAULT_SCHEDULE_LABELS, type ScheduleLabels } from "./labels"
 
 const DEFAULT_OPTIONS: ScheduleOptions = {
   time: "09:00",
@@ -46,6 +47,8 @@ export interface ScheduleBuilderState {
 export function useScheduleBuilder(
   value: string,
   onChange: (cronExpression: string) => void,
+  labels: ScheduleLabels = DEFAULT_SCHEDULE_LABELS,
+  locale = "en-US",
 ): ScheduleBuilderState {
   // Detect initial preset/interval from the incoming cron.
   const detectedPreset = cronToPreset(value)
@@ -144,13 +147,13 @@ export function useScheduleBuilder(
   // saved schedule rather than the placeholder picker state.
   let summary: string
   if (unrepresentable && !touched) {
-    summary = cronSummary(value)
+    summary = cronSummary(value, labels.summary, locale)
   } else if (!isCustom) {
-    summary = presetSummary(activePreset, options)
+    summary = presetSummary(activePreset, options, labels.summary, locale)
   } else if (everyValid) {
-    summary = cronSummary(customCron)
+    summary = cronSummary(customCron, labels.summary, locale)
   } else {
-    summary = intervalUnit === "weeks" ? "Pick at least one day" : "Enter a number"
+    summary = intervalUnit === "weeks" ? labels.pickDay : labels.enterNumber
   }
 
   return {

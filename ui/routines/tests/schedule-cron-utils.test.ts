@@ -103,7 +103,7 @@ describe("cronSummary", () => {
   it("describes weekly-on-days and every-N-month schedules", () => {
     assert.equal(
       cronSummary("0 9 * * 1,3,5"),
-      "Runs every week on Mon, Wed and Fri at 9:00 AM",
+      "Runs every week on Mon, Wed, and Fri at 9:00 AM",
     )
     assert.equal(cronSummary("0 9 * * 6,0"), "Runs every week on Sun and Sat at 9:00 AM")
     assert.equal(

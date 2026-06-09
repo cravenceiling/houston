@@ -4,25 +4,22 @@
  * pills (minute / hour / day / week / month). The "weeks" unit has no count
  * (cron can't express "every N weeks"), so the stepper is hidden and the
  * WeekdaysPicker carries the schedule instead.
+ *
+ * Stays i18n-agnostic: the heading, unit names (singular/plural) and stepper
+ * aria-labels arrive via props; the consumer passes localized strings in.
  */
 import { cn } from "@houston-ai/core"
 import { Minus, Plus } from "lucide-react"
 import type { IntervalUnit } from "./schedule-interval-utils"
 import { labelClass } from "./schedule-picker-fields"
 
-const FREQS: { value: IntervalUnit; singular: string }[] = [
-  { value: "minutes", singular: "minute" },
-  { value: "hours", singular: "hour" },
-  { value: "days", singular: "day" },
-  { value: "weeks", singular: "week" },
-  { value: "months", singular: "month" },
-]
-
 function NumberStepper({
   value,
   onChange,
   invalid,
   disabled,
+  decreaseLabel,
+  increaseLabel,
 }: {
   value: string
   onChange: (value: string) => void
@@ -30,6 +27,8 @@ function NumberStepper({
   // "weeks" has no count, so the stepper is disabled (but kept mounted) to hold
   // its place and stop the unit pills jumping left when that unit is picked.
   disabled?: boolean
+  decreaseLabel: string
+  increaseLabel: string
 }) {
   const n = Number(value) || 1
   return (
@@ -42,7 +41,7 @@ function NumberStepper({
     >
       <button
         type="button"
-        aria-label="Decrease"
+        aria-label={decreaseLabel}
         onClick={() => onChange(String(Math.max(1, n - 1)))}
         disabled={disabled || n <= 1}
         className="grid size-9 place-items-center text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -61,7 +60,7 @@ function NumberStepper({
       />
       <button
         type="button"
-        aria-label="Increase"
+        aria-label={increaseLabel}
         onClick={() => onChange(String(n + 1))}
         disabled={disabled}
         className="grid size-9 place-items-center text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -72,13 +71,23 @@ function NumberStepper({
   )
 }
 
+const UNIT_ORDER: IntervalUnit[] = ["minutes", "hours", "days", "weeks", "months"]
+
 export function IntervalPicker({
+  label,
+  units,
+  decreaseLabel,
+  increaseLabel,
   every,
   unit,
   invalid,
   onEveryChange,
   onUnitChange,
 }: {
+  label: string
+  units: Record<IntervalUnit, { one: string; other: string }>
+  decreaseLabel: string
+  increaseLabel: string
   every: string
   unit: IntervalUnit
   invalid?: boolean
@@ -91,28 +100,30 @@ export function IntervalPicker({
   const plural = Number(every) > 1
   return (
     <div>
-      <label className={labelClass}>Repeat every</label>
+      <label className={labelClass}>{label}</label>
       <div className="flex flex-wrap items-center gap-2">
         <NumberStepper
           value={every}
           onChange={onEveryChange}
           invalid={invalid && !countDisabled}
           disabled={countDisabled}
+          decreaseLabel={decreaseLabel}
+          increaseLabel={increaseLabel}
         />
         <div className="flex flex-wrap gap-1.5">
-          {FREQS.map((f) => (
+          {UNIT_ORDER.map((u) => (
             <button
-              key={f.value}
+              key={u}
               type="button"
-              onClick={() => onUnitChange(f.value)}
+              onClick={() => onUnitChange(u)}
               className={cn(
                 "h-9 rounded-full px-3 text-xs font-medium transition-colors",
-                unit === f.value
+                unit === u
                   ? "bg-primary text-primary-foreground"
                   : "bg-background border border-border/20 text-muted-foreground hover:text-foreground",
               )}
             >
-              {f.singular}{plural ? "s" : ""}
+              {plural ? units[u].other : units[u].one}
             </button>
           ))}
         </div>

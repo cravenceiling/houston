@@ -1,11 +1,26 @@
 /**
  * Cron expression utilities for ScheduleBuilder.
  * Converts preset + options into cron expressions and generates summaries.
+ *
+ * Every user-visible string arrives via `labels` and localizes through the
+ * pure formatters in `./schedule-format` (which use `Intl.*Format(locale)` for
+ * day names, clock time and list joining). The package itself stays
+ * i18n-agnostic — see `./labels`.
  */
 import type { SchedulePreset } from "./types"
-import { parseTime, formatTime, ordinal, joinList } from "./schedule-format.ts"
-
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+import {
+  interp,
+  DEFAULT_SCHEDULE_SUMMARY_LABELS,
+  type ScheduleSummaryLabels,
+} from "./labels.ts"
+import {
+  parseTime,
+  formatTime,
+  ordinal,
+  weekdayName,
+  shortWeekdayNames,
+  joinList,
+} from "./schedule-format.ts"
 
 export interface ScheduleOptions {
   time: string       // "09:00"
@@ -42,24 +57,33 @@ export function presetToCron(
 export function presetSummary(
   preset: SchedulePreset,
   options: ScheduleOptions,
+  labels: ScheduleSummaryLabels = DEFAULT_SCHEDULE_SUMMARY_LABELS,
+  locale = "en-US",
 ): string {
-  const t = formatTime(options.time)
+  const t = formatTime(options.time, locale)
 
   switch (preset) {
     case "every_30min":
-      return "Runs every 30 minutes"
+      return labels.every30
     case "hourly":
-      return "Runs at the start of every hour"
+      return labels.everyHourStart
     case "daily":
-      return `Runs every day at ${t}`
+      return interp(labels.everyDay, { time: t })
     case "weekdays":
-      return `Runs Monday through Friday at ${t}`
+      return interp(labels.weekdays, { time: t })
     case "weekly":
-      return `Runs every ${DAY_NAMES[options.dayOfWeek]} at ${t}`
+      return interp(labels.weekly, {
+        day: weekdayName(options.dayOfWeek, locale),
+        time: t,
+      })
     case "monthly":
-      return `Runs on the ${ordinal(options.dayOfMonth)} of every month at ${t}`
+      return interp(labels.monthly, {
+        n: options.dayOfMonth,
+        ordinal: ordinal(options.dayOfMonth),
+        time: t,
+      })
     case "custom":
-      return "Custom cron schedule"
+      return labels.customCron
   }
 }
 
@@ -116,21 +140,31 @@ export function cronToOptions(cron: string): Partial<ScheduleOptions> {
 /**
  * Human-readable summary of any cron expression, written for non-technical
  * users. Recognizes the presets and the common interval patterns (every N
- * minutes / hours) so a `*​/5 * * * *` reads as "Runs every 5 minutes" instead
- * of raw cron, and otherwise falls back to a generic label.
+ * minutes / hours / days, weekly on a day list, every N months) so a
+ * `*​/5 * * * *` reads as "Runs every 5 minutes" instead of raw cron, and
+ * otherwise falls back to a generic label.
  */
-export function cronSummary(cron: string): string {
+export function cronSummary(
+  cron: string,
+  labels: ScheduleSummaryLabels = DEFAULT_SCHEDULE_SUMMARY_LABELS,
+  locale = "en-US",
+): string {
   const trimmed = cron.trim()
-  if (!trimmed) return "No schedule set"
+  if (!trimmed) return labels.noSchedule
 
   const preset = cronToPreset(trimmed)
   if (preset && preset !== "custom") {
     const o = cronToOptions(trimmed)
-    return presetSummary(preset, {
-      time: o.time ?? "09:00",
-      dayOfWeek: o.dayOfWeek ?? 1,
-      dayOfMonth: o.dayOfMonth ?? 1,
-    })
+    return presetSummary(
+      preset,
+      {
+        time: o.time ?? "09:00",
+        dayOfWeek: o.dayOfWeek ?? 1,
+        dayOfMonth: o.dayOfMonth ?? 1,
+      },
+      labels,
+      locale,
+    )
   }
 
   const parts = trimmed.split(/\s+/)
@@ -142,21 +176,23 @@ export function cronSummary(cron: string): string {
       const minStep = min.match(/^\*\/(\d+)$/)
       if (hour === "*" && (min === "*" || minStep)) {
         const n = minStep ? Number(minStep[1]) : 1
-        return n === 1 ? "Runs every minute" : `Runs every ${n} minutes`
+        return n === 1 ? labels.everyMinute : interp(labels.everyNMinutes, { n })
       }
       // Every N hours on the hour: "M */N * * *".
       const hourStep = hour.match(/^\*\/(\d+)$/)
       if (/^\d+$/.test(min) && hourStep) {
         const n = Number(hourStep[1])
-        return n === 1 ? "Runs every hour" : `Runs every ${n} hours`
+        return n === 1 ? labels.everyHour : interp(labels.everyNHours, { n })
       }
     }
     // Every N days at a fixed time: "M H */N * *".
     const domStep = dom.match(/^\*\/(\d+)$/)
     if (month === "*" && dow === "*" && /^\d+$/.test(min) && /^\d+$/.test(hour) && domStep) {
       const n = Number(domStep[1])
-      const t = formatTime(`${hour}:${min}`)
-      return n === 1 ? `Runs every day at ${t}` : `Runs every ${n} days at ${t}`
+      const t = formatTime(`${hour}:${min}`, locale)
+      return n === 1
+        ? interp(labels.everyDay, { time: t })
+        : interp(labels.everyNDays, { n, time: t })
     }
 
     // Weekly on specific days: "M H * * d,d,d".
@@ -164,22 +200,28 @@ export function cronSummary(cron: string): string {
       dom === "*" && month === "*" &&
       /^\d+$/.test(min) && /^\d+$/.test(hour) && /^[0-6](,[0-6])*$/.test(dow)
     ) {
-      const t = formatTime(`${hour}:${min}`)
+      const t = formatTime(`${hour}:${min}`, locale)
+      const shorts = shortWeekdayNames(locale)
       const days = dow
         .split(",")
         .map(Number)
         .sort((a, b) => a - b)
-        .map((d) => DAY_NAMES[d].slice(0, 3))
-      return `Runs every week on ${joinList(days)} at ${t}`
+        .map((d) => shorts[d])
+      return interp(labels.everyWeekOnDays, { days: joinList(days, locale), time: t })
     }
 
     // Monthly on a day-of-month, every N months: "M H D */N *".
     const monthStep = month.match(/^\*\/(\d+)$/)
     if (dow === "*" && monthStep && /^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom)) {
-      const t = formatTime(`${hour}:${min}`)
-      return `Runs on the ${ordinal(Number(dom))} of every ${Number(monthStep[1])} months at ${t}`
+      const t = formatTime(`${hour}:${min}`, locale)
+      return interp(labels.everyNMonths, {
+        n: Number(dom),
+        ordinal: ordinal(Number(dom)),
+        months: Number(monthStep[1]),
+        time: t,
+      })
     }
   }
 
-  return "Custom schedule"
+  return labels.custom
 }

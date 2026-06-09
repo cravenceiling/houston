@@ -9,12 +9,15 @@
  * Conditional fields are wrapped in `Reveal` so they animate in/out (and the
  * card resizes) instead of snapping — switching units never makes the layout
  * jump. State and cron derivation live in useScheduleBuilder; this file is JSX.
+ *
+ * All visible text arrives via `labels` (English defaults) so the package stays
+ * i18n-agnostic; `locale` drives day names + time formatting in the summary.
  */
 import type { ReactNode } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { cn } from "@houston-ai/core"
 import type { SchedulePreset } from "./types"
-import { SCHEDULE_PRESET_LABELS } from "./types"
+import { DEFAULT_SCHEDULE_LABELS, type ScheduleLabels } from "./labels"
 import {
   TimePicker,
   DayOfWeekPicker,
@@ -28,6 +31,10 @@ export interface ScheduleBuilderProps {
   value: string
   onChange: (cronExpression: string) => void
   presets?: SchedulePreset[]
+  /** Localized labels. Defaults to English so standalone callers still work. */
+  labels?: ScheduleLabels
+  /** BCP-47 locale for day names + time formatting in the live summary. */
+  locale?: string
 }
 
 const DEFAULT_PRESETS: SchedulePreset[] = [
@@ -57,6 +64,8 @@ export function ScheduleBuilder({
   value,
   onChange,
   presets = DEFAULT_PRESETS,
+  labels = DEFAULT_SCHEDULE_LABELS,
+  locale = "en-US",
 }: ScheduleBuilderProps) {
   const {
     activePreset,
@@ -73,7 +82,7 @@ export function ScheduleBuilder({
     isCustom,
     showTime,
     summary,
-  } = useScheduleBuilder(value, onChange)
+  } = useScheduleBuilder(value, onChange, labels, locale)
 
   const showCustomTime =
     isCustom &&
@@ -96,7 +105,7 @@ export function ScheduleBuilder({
                 : "bg-background border border-black/[0.04] text-muted-foreground hover:text-foreground",
             )}
           >
-            {SCHEDULE_PRESET_LABELS[preset]}
+            {labels.presets[preset]}
           </button>
         ))}
       </div>
@@ -110,6 +119,7 @@ export function ScheduleBuilder({
           {showTime && (
             <Reveal key="preset-time">
               <TimePicker
+                label={labels.timeLabel}
                 value={options.time}
                 onChange={(time) => updateOption({ time })}
               />
@@ -119,6 +129,8 @@ export function ScheduleBuilder({
           {activePreset === "weekly" && (
             <Reveal key="weekly-dow">
               <DayOfWeekPicker
+                label={labels.dayLabel}
+                locale={locale}
                 value={options.dayOfWeek}
                 onChange={(dayOfWeek) => updateOption({ dayOfWeek })}
               />
@@ -128,6 +140,7 @@ export function ScheduleBuilder({
           {activePreset === "monthly" && (
             <Reveal key="monthly-dom">
               <DayOfMonthPicker
+                label={labels.dayOfMonthLabel}
                 value={options.dayOfMonth}
                 onChange={(dayOfMonth) => updateOption({ dayOfMonth })}
               />
@@ -137,6 +150,10 @@ export function ScheduleBuilder({
           {isCustom && (
             <Reveal key="custom-interval">
               <IntervalPicker
+                label={labels.repeatEvery}
+                units={labels.units}
+                decreaseLabel={labels.decrease}
+                increaseLabel={labels.increase}
                 every={intervalEvery}
                 unit={intervalUnit}
                 invalid={!everyValid}
@@ -149,6 +166,9 @@ export function ScheduleBuilder({
           {isCustom && intervalUnit === "weeks" && (
             <Reveal key="custom-weekdays">
               <WeekdaysPicker
+                label={labels.onTheseDays}
+                locale={locale}
+                shortcuts={labels.shortcuts}
                 value={intervalWeekdays}
                 onChange={setIntervalWeekdays}
               />
@@ -158,6 +178,7 @@ export function ScheduleBuilder({
           {isCustom && intervalUnit === "months" && (
             <Reveal key="custom-dom">
               <DayOfMonthPicker
+                label={labels.dayOfMonthLabel}
                 value={options.dayOfMonth}
                 onChange={(dayOfMonth) => updateOption({ dayOfMonth })}
               />
@@ -167,6 +188,7 @@ export function ScheduleBuilder({
           {showCustomTime && (
             <Reveal key="custom-time">
               <TimePicker
+                label={labels.timeLabel}
                 value={options.time}
                 onChange={(time) => updateOption({ time })}
               />
