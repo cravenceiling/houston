@@ -63,15 +63,22 @@
       "custom": "Personalizado"
     },
     "units": {
-      "minutes": "minutos",
-      "hours": "horas",
-      "days": "dias"
+      "minutes": { "one": "minuto", "other": "minutos" },
+      "hours": { "one": "hora", "other": "horas" },
+      "days": { "one": "dia", "other": "dias" },
+      "weeks": { "one": "semana", "other": "semanas" },
+      "months": { "one": "mês", "other": "meses" }
     },
     "timeLabel": "Hora",
     "dayLabel": "Dia",
     "dayOfMonthLabel": "Dia do mês",
-    "runEvery": "Executar a cada",
+    "repeatEvery": "Repetir a cada",
     "enterNumber": "Digite um número",
+    "pickDay": "Escolha pelo menos um dia",
+    "onTheseDays": "Nestes dias",
+    "shortcuts": { "everyDay": "Todos os dias", "weekdays": "Dias úteis", "weekends": "Fins de semana" },
+    "decrease": "Diminuir",
+    "increase": "Aumentar",
     "summary": {
       "noSchedule": "Nenhum agendamento definido",
       "custom": "Agendamento personalizado",
@@ -86,7 +93,9 @@
       "everyNDays": "Roda a cada {n} dias às {time}",
       "weekdays": "Roda de segunda a sexta às {time}",
       "weekly": "Roda a cada {day} às {time}",
-      "monthly": "Roda no dia {n} de cada mês às {time}"
+      "everyWeekOnDays": "Roda toda semana em {days} às {time}",
+      "monthly": "Roda no dia {n} de cada mês às {time}",
+      "everyNMonths": "Roda no dia {n} de cada {months} meses às {time}"
     }
   },
   "nextFire": {

@@ -5,8 +5,7 @@
  *
  * These mirror `app/src/locales/en/routines.json`; keep them in sync.
  */
-import { SCHEDULE_PRESET_LABELS } from "./types"
-import { INTERVAL_UNIT_LABELS } from "./schedule-interval-utils"
+import { SCHEDULE_PRESET_LABELS } from "./types.ts"
 import type {
   ScheduleSummaryLabels,
   NextFireLabels,
@@ -32,7 +31,9 @@ export const DEFAULT_SCHEDULE_SUMMARY_LABELS: ScheduleSummaryLabels = {
   everyNDays: "Runs every {n} days at {time}",
   weekdays: "Runs Monday through Friday at {time}",
   weekly: "Runs every {day} at {time}",
+  everyWeekOnDays: "Runs every week on {days} at {time}",
   monthly: "Runs on the {ordinal} of every month at {time}",
+  everyNMonths: "Runs on the {ordinal} of every {months} months at {time}",
 }
 
 export const DEFAULT_NEXT_FIRE_LABELS: NextFireLabels = {
@@ -67,12 +68,23 @@ export const DEFAULT_RUN_HISTORY_LABELS: RunHistoryLabels = {
 
 export const DEFAULT_SCHEDULE_LABELS: ScheduleLabels = {
   presets: SCHEDULE_PRESET_LABELS,
-  units: INTERVAL_UNIT_LABELS,
+  units: {
+    minutes: { one: "minute", other: "minutes" },
+    hours: { one: "hour", other: "hours" },
+    days: { one: "day", other: "days" },
+    weeks: { one: "week", other: "weeks" },
+    months: { one: "month", other: "months" },
+  },
   timeLabel: "Time",
   dayLabel: "Day",
   dayOfMonthLabel: "Day of month",
-  runEvery: "Run every",
+  repeatEvery: "Repeat every",
   enterNumber: "Enter a number",
+  pickDay: "Pick at least one day",
+  onTheseDays: "On these days",
+  shortcuts: { everyDay: "Every day", weekdays: "Weekdays", weekends: "Weekends" },
+  decrease: "Decrease",
+  increase: "Increase",
   summary: DEFAULT_SCHEDULE_SUMMARY_LABELS,
 }
 

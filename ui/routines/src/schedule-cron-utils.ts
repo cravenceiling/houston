@@ -1,46 +1,31 @@
 /**
  * Cron expression utilities for ScheduleBuilder.
  * Converts preset + options into cron expressions and generates summaries.
+ *
+ * Every user-visible string arrives via `labels` and localizes through the
+ * pure formatters in `./schedule-format` (which use `Intl.*Format(locale)` for
+ * day names, clock time and list joining). The package itself stays
+ * i18n-agnostic — see `./labels`.
  */
 import type { SchedulePreset } from "./types"
 import {
   interp,
   DEFAULT_SCHEDULE_SUMMARY_LABELS,
   type ScheduleSummaryLabels,
-} from "./labels"
+} from "./labels.ts"
+import {
+  parseTime,
+  formatTime,
+  ordinal,
+  weekdayName,
+  shortWeekdayNames,
+  joinList,
+} from "./schedule-format.ts"
 
 export interface ScheduleOptions {
   time: string       // "09:00"
   dayOfWeek: number  // 0-6
   dayOfMonth: number // 1-31
-}
-
-/** Parse "HH:MM" into { hour, minute } */
-export function parseTime(time: string): { hour: number; minute: number } {
-  const [h, m] = time.split(":").map(Number)
-  return { hour: h ?? 9, minute: m ?? 0 }
-}
-
-/** Format hour:minute as a localized clock time (12h for en, 24h for es/pt). */
-function formatTime(time: string, locale = "en-US"): string {
-  const { hour, minute } = parseTime(time)
-  const formatted = new Intl.DateTimeFormat(locale, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(2000, 0, 1, hour, minute))
-  // Newer ICU separates the time from AM/PM with a narrow no-break space
-  // (U+202F); normalize to a plain space so output stays stable across runtimes.
-  return formatted.replace(/\u202f/g, " ")
-}
-
-/** Localized full weekday name for a 0 (Sun) – 6 (Sat) index. */
-function weekdayName(dayOfWeek: number, locale = "en-US"): string {
-  // Jan 7 2024 (UTC) is a Sunday, so +dayOfWeek lands on the wanted weekday.
-  const date = new Date(Date.UTC(2024, 0, 7 + (dayOfWeek % 7)))
-  return new Intl.DateTimeFormat(locale, {
-    weekday: "long",
-    timeZone: "UTC",
-  }).format(date)
 }
 
 /** Build a cron expression from preset and options */
@@ -102,12 +87,6 @@ export function presetSummary(
   }
 }
 
-function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"]
-  const v = n % 100
-  return n + (s[(v - 20) % 10] || s[v] || s[0])
-}
-
 /**
  * Classify a cron expression for the schedule builder. Three-way result, and
  * the distinction is load-bearing:
@@ -161,8 +140,9 @@ export function cronToOptions(cron: string): Partial<ScheduleOptions> {
 /**
  * Human-readable summary of any cron expression, written for non-technical
  * users. Recognizes the presets and the common interval patterns (every N
- * minutes / hours) so a `*​/5 * * * *` reads as "Runs every 5 minutes" instead
- * of raw cron, and otherwise falls back to a generic label.
+ * minutes / hours / days, weekly on a day list, every N months) so a
+ * `*​/5 * * * *` reads as "Runs every 5 minutes" instead of raw cron, and
+ * otherwise falls back to a generic label.
  */
 export function cronSummary(
   cron: string,
@@ -213,6 +193,33 @@ export function cronSummary(
       return n === 1
         ? interp(labels.everyDay, { time: t })
         : interp(labels.everyNDays, { n, time: t })
+    }
+
+    // Weekly on specific days: "M H * * d,d,d".
+    if (
+      dom === "*" && month === "*" &&
+      /^\d+$/.test(min) && /^\d+$/.test(hour) && /^[0-6](,[0-6])*$/.test(dow)
+    ) {
+      const t = formatTime(`${hour}:${min}`, locale)
+      const shorts = shortWeekdayNames(locale)
+      const days = dow
+        .split(",")
+        .map(Number)
+        .sort((a, b) => a - b)
+        .map((d) => shorts[d])
+      return interp(labels.everyWeekOnDays, { days: joinList(days, locale), time: t })
+    }
+
+    // Monthly on a day-of-month, every N months: "M H D */N *".
+    const monthStep = month.match(/^\*\/(\d+)$/)
+    if (dow === "*" && monthStep && /^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom)) {
+      const t = formatTime(`${hour}:${min}`, locale)
+      return interp(labels.everyNMonths, {
+        n: Number(dom),
+        ordinal: ordinal(Number(dom)),
+        months: Number(monthStep[1]),
+        time: t,
+      })
     }
   }
 

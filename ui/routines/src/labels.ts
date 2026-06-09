@@ -30,7 +30,7 @@ export function interp(
   )
 }
 
-/** Plain-language summary of a cron schedule. `{n}`/`{time}`/`{day}`/`{ordinal}`. */
+/** Plain-language summary of a cron schedule. `{n}`/`{time}`/`{day}`/`{days}`/`{ordinal}`/`{months}`. */
 export interface ScheduleSummaryLabels {
   noSchedule: string
   custom: string
@@ -45,7 +45,11 @@ export interface ScheduleSummaryLabels {
   everyNDays: string
   weekdays: string
   weekly: string
+  /** Custom weekly on a list of days. `{days}` is a localized weekday list. */
+  everyWeekOnDays: string
   monthly: string
+  /** Custom every-N-months on a day of month. `{ordinal}`/`{n}` day, `{months}` count. */
+  everyNMonths: string
 }
 
 /** Relative + absolute "next run" phrasing. `{m}`/`{h}`/`{d}`/`{day}`/`{time}`. */
@@ -83,12 +87,23 @@ export interface RunHistoryLabels {
 /** Schedule builder + picker-field labels. */
 export interface ScheduleLabels {
   presets: Record<import("./types").SchedulePreset, string>
-  units: Record<import("./schedule-interval-utils").IntervalUnit, string>
+  /** Unit names for the custom-interval pills, with singular + plural forms. */
+  units: Record<import("./schedule-interval-utils").IntervalUnit, { one: string; other: string }>
   timeLabel: string
   dayLabel: string
   dayOfMonthLabel: string
-  runEvery: string
+  /** "Repeat every" — label above the count stepper. */
+  repeatEvery: string
   enterNumber: string
+  /** Validation hint when the custom "weeks" unit has no day selected. */
+  pickDay: string
+  /** WeekdaysPicker heading ("On these days"). */
+  onTheseDays: string
+  /** WeekdaysPicker quick-select chips. */
+  shortcuts: { everyDay: string; weekdays: string; weekends: string }
+  /** aria-labels for the count stepper's − / + buttons. */
+  decrease: string
+  increase: string
   summary: ScheduleSummaryLabels
 }
 
@@ -170,4 +185,4 @@ export {
   DEFAULT_GRID_LABELS,
   DEFAULT_ROW_LABELS,
   DEFAULT_TIMEZONE_GATE_LABELS,
-} from "./labels-default"
+} from "./labels-default.ts"

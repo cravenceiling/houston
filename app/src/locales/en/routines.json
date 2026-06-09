@@ -63,15 +63,22 @@
       "custom": "Custom"
     },
     "units": {
-      "minutes": "minutes",
-      "hours": "hours",
-      "days": "days"
+      "minutes": { "one": "minute", "other": "minutes" },
+      "hours": { "one": "hour", "other": "hours" },
+      "days": { "one": "day", "other": "days" },
+      "weeks": { "one": "week", "other": "weeks" },
+      "months": { "one": "month", "other": "months" }
     },
     "timeLabel": "Time",
     "dayLabel": "Day",
     "dayOfMonthLabel": "Day of month",
-    "runEvery": "Run every",
+    "repeatEvery": "Repeat every",
     "enterNumber": "Enter a number",
+    "pickDay": "Pick at least one day",
+    "onTheseDays": "On these days",
+    "shortcuts": { "everyDay": "Every day", "weekdays": "Weekdays", "weekends": "Weekends" },
+    "decrease": "Decrease",
+    "increase": "Increase",
     "summary": {
       "noSchedule": "No schedule set",
       "custom": "Custom schedule",
@@ -86,7 +93,9 @@
       "everyNDays": "Runs every {n} days at {time}",
       "weekdays": "Runs Monday through Friday at {time}",
       "weekly": "Runs every {day} at {time}",
-      "monthly": "Runs on the {ordinal} of every month at {time}"
+      "everyWeekOnDays": "Runs every week on {days} at {time}",
+      "monthly": "Runs on the {ordinal} of every month at {time}",
+      "everyNMonths": "Runs on the {ordinal} of every {months} months at {time}"
     }
   },
   "nextFire": {

@@ -41,7 +41,9 @@ const ES_SUMMARY: ScheduleSummaryLabels = {
   everyNDays: "Se ejecuta cada {n} días a las {time}",
   weekdays: "Se ejecuta de lunes a viernes a las {time}",
   weekly: "Se ejecuta cada {day} a las {time}",
+  everyWeekOnDays: "Se ejecuta cada semana los {days} a las {time}",
   monthly: "Se ejecuta el día {n} de cada mes a las {time}",
+  everyNMonths: "Se ejecuta el día {n} de cada {months} meses a las {time}",
 }
 
 describe("cronSummary localization", () => {
@@ -53,6 +55,28 @@ describe("cronSummary localization", () => {
     assert.equal(cronSummary("*/5 * * * *", ES_SUMMARY), "Se ejecuta cada 5 minutos")
     assert.equal(cronSummary("0 */2 * * *", ES_SUMMARY), "Se ejecuta cada 2 horas")
     assert.equal(cronSummary("", ES_SUMMARY), "Sin horario definido")
+  })
+  it("localizes the weekly-on-days list through Intl", () => {
+    // English joins with the locale's conjunction (Oxford comma in en-US).
+    assert.equal(
+      cronSummary("0 9 * * 1,3,5"),
+      "Runs every week on Mon, Wed, and Fri at 9:00 AM",
+    )
+    // Spanish: localized template + weekday names + "y" connector, no English leak.
+    const es = cronSummary("0 9 * * 1,3,5", ES_SUMMARY, "es")
+    assert.match(es, /^Se ejecuta cada semana los /)
+    assert.match(es, / y /)
+    assert.doesNotMatch(es, /Mon|Wed|Fri| and /)
+  })
+  it("localizes every-N-months (English ordinal, Spanish plain day)", () => {
+    assert.equal(
+      cronSummary("30 8 1 */2 *"),
+      "Runs on the 1st of every 2 months at 8:30 AM",
+    )
+    assert.match(
+      cronSummary("30 8 1 */2 *", ES_SUMMARY, "es"),
+      /^Se ejecuta el día 1 de cada 2 meses a las /,
+    )
   })
 })
 

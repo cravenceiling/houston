@@ -11,7 +11,7 @@ import {
   interp,
   DEFAULT_NEXT_FIRE_LABELS,
   type NextFireLabels,
-} from "./labels"
+} from "./labels.ts"
 
 interface CronFields {
   minute: Set<number>
