@@ -23,11 +23,10 @@ use axum::{
 };
 use houston_composio::toolkit_display_name;
 use houston_engine_core::sessions::{
-    self, generate_instructions, history, resolve_agent_dir, resolve_provider, summarize,
-    SessionRuntime, StartParams,
+    self, fallback_provider, generate_instructions, history, resolve_agent_dir, resolve_provider,
+    summarize, SessionRuntime, StartParams,
 };
 use houston_engine_core::CoreError;
-use houston_terminal_manager::Provider;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -110,13 +109,15 @@ async fn start_session(
         .map(|p| sessions::expand_tilde(std::path::Path::new(p)))
         .unwrap_or_else(|| agent_dir.clone());
 
-    // Override > agent config > Anthropic default. Shared with routine
+    // Override > agent config > authenticated fallback. Shared with routine
     // dispatch via `sessions::resolve_provider_with_overrides`.
     let resolved = sessions::resolve_provider_with_overrides(
+        &st.engine.db,
         &agent_dir,
         req.provider.as_deref(),
         req.model.clone(),
     )
+    .await
     .map_err(CoreError::BadRequest)?;
     let (provider, model) = (resolved.provider, resolved.model);
 
@@ -213,10 +214,12 @@ async fn summarize_activity(
         (provider, req.model)
     } else if let Some(agent_path) = req.agent_path.as_deref() {
         let agent_dir = resolve_agent_dir(&st.engine.paths, agent_path);
-        let resolved = resolve_provider(&agent_dir);
+        let resolved = resolve_provider(&st.engine.db, &agent_dir).await;
         (resolved.provider, req.model.or(resolved.model))
     } else {
-        (Provider::default(), req.model)
+        // No provider + no agent to resolve against: auth-aware fallback so an
+        // OpenAI-only user's title summary doesn't spawn the Claude CLI (#483).
+        (fallback_provider(&st.engine.db).await, req.model)
     };
     Ok(Json(
         summarize::summarize(&req.message, provider, model.as_deref()).await?,
@@ -258,6 +261,7 @@ struct GenerateInstructionsResponse {
 }
 
 async fn generate_agent_instructions(
+    State(st): State<Arc<ServerState>>,
     Json(req): Json<GenerateInstructionsRequest>,
 ) -> Result<Json<GenerateInstructionsResponse>, ApiError> {
     let (provider, model) = if let Some(p_str) = req.provider.as_deref() {
@@ -266,9 +270,9 @@ async fn generate_agent_instructions(
             .map_err(|e: String| CoreError::BadRequest(e))?;
         (provider, req.model)
     } else {
-        // `Provider::default()` is anthropic — same fallback the
-        // `summarize_activity` handler above uses for the no-override case.
-        (Provider::default(), req.model)
+        // No override: auth-aware fallback (same as summarize) so generating an
+        // agent's instructions for an OpenAI-only user doesn't spawn Claude (#483).
+        (fallback_provider(&st.engine.db).await, req.model)
     };
     let result =
         generate_instructions::generate_instructions(&req.description, provider, model.as_deref())

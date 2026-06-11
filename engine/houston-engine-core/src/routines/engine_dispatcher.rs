@@ -72,10 +72,13 @@ impl RoutineDispatcher for EngineRoutineDispatcher {
         // turn uses. A bad provider id surfaces as a run error instead of
         // silently reverting, so the run row shows why it didn't start.
         let resolved = match sessions::resolve_provider_with_overrides(
+            &self.db,
             ctx.working_dir,
             ctx.routine.provider.as_deref(),
             ctx.routine.model.clone(),
-        ) {
+        )
+        .await
+        {
             Ok(resolved) => resolved,
             Err(e) => {
                 return DispatchOutcome {
