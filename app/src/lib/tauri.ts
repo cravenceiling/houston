@@ -82,6 +82,8 @@ async function surfaceError(
 
   // Expected, explainable engine errors the caller surfaces inline. Logged
   // above for the local log tail, but no red bug toast and no Sentry report.
+  // e.g. `composio_login_timeout` (the user closed the sign-in tab) and
+  // `skill_not_found` (the skill was renamed/removed).
   const kind =
     err && typeof err === "object" && "kind" in err
       ? (err as { kind?: unknown }).kind
@@ -501,7 +503,15 @@ export const tauriConnections = {
       return { login_url: r.login_url, cli_key: r.cli_key };
     }),
   completeLogin: (cliKey: string) =>
-    call<void>("complete_composio_login", () => getEngine().composioCompleteLogin(cliKey)),
+    call<void>(
+      "complete_composio_login",
+      () => getEngine().composioCompleteLogin(cliKey),
+      undefined,
+      // The sign-in dialog renders failures inline, so don't double-surface
+      // as a toast. The expected `composio_login_timeout` (user closed the
+      // tab) is fully silenced; genuine faults still capture to Sentry.
+      { toast: false, silenceKinds: ["composio_login_timeout"] },
+    ),
   logout: () => call<void>("logout_composio", () => getEngine().composioLogout()),
   isCliInstalled: () =>
     call<boolean>("is_composio_cli_installed", () => getEngine().composioCliInstalled()),
